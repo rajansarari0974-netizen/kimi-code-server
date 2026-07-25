@@ -1,5 +1,8 @@
 node_modules/
 pentaract/target/
+pentaract/.env
+*.log
+*.tar.gz
+kimi-backups/
 Dockerfile.backup
 Dockerfile.minimal
-*.log
