@@ -58,6 +58,26 @@ function log(m) {
   console.error(m);
 }
 
+// ====== UTILITY HELPERS ======
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  const parts = [];
+  if (d > 0) parts.push(d + 'd');
+  if (h > 0) parts.push(h + 'h');
+  if (m > 0) parts.push(m + 'm');
+  parts.push(s + 's');
+  return parts.join(' ');
+}
+function formatSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(1024));
+  return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+}
+
 const STARTING_HTML = `<!DOCTYPE html><html><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kimi Code</title>
@@ -1937,6 +1957,39 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid #333;border-radius:50%;border-top-color:#6c5ce7;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty-state{text-align:center;padding:30px;color:#666;font-size:14px}
+/* Admin Panel Extended Styles */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.stat-box{background:#252540;border-radius:8px;padding:12px;margin-bottom:8px}
+.stat-box .label{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.stat-box .value{color:#fff;font-size:18px;font-weight:600;margin-top:2px}
+.stat-box .value.green{color:#2ecc71}.stat-box .value.yellow{color:#f1c40f}.stat-box .value.red{color:#e74c3c}
+.progress-bar{height:6px;background:#1e1e30;border-radius:3px;margin-top:6px;overflow:hidden}
+.progress-bar .fill{height:100%;border-radius:3px;transition:width .5s}.fill.green{background:#2ecc71}.fill.yellow{background:#f1c40f}.fill.red{background:#e74c3c}
+.session-item,.env-row,.file-item,.backup-item,.bench-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#252540;border-radius:6px;margin-bottom:4px;font-size:13px}
+.session-item .sid,.env-row .ekey,.file-item .fname{color:#6c5ce7;font-weight:500;font-size:12px}
+.file-item .fmeta{color:#888;font-size:11px}.file-item .fsize{color:#aaa;font-size:11px}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
+.badge.ok{background:#1a3a1a;color:#2ecc71}.badge.err{background:#3a1a1a;color:#e74c3c}.badge.warn{background:#3a3a1a;color:#f1c40f}
+.log-viewer{background:#0a0a0a;border:1px solid #333;border-radius:8px;padding:12px;font-family:monospace;font-size:12px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#aaa;line-height:1.6}
+.log-viewer .ts{color:#6c5ce7}.log-viewer .ok{color:#2ecc71}.log-viewer .err{color:#e74c3c}.log-viewer .warn{color:#f1c40f}
+.card-header{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}
+.card-header:hover{opacity:.8}
+.card-header .arrow{font-size:12px;color:#888;transition:transform .2s}
+.card-header .arrow.open{transform:rotate(180deg)}
+.section-content{padding-top:12px}
+.toolbar{margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.toolbar input{padding:6px 10px;background:#1e1e38;border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;outline:none;flex:1;min-width:100px}
+.toolbar input:focus{border-color:#6c5ce7}
+.net-result{background:#1e1e30;border-radius:8px;padding:12px;margin-top:8px;font-family:monospace;font-size:12px;color:#ccc;max-height:200px;overflow-y:auto}
+.folder-icon{color:#f1c40f;margin-right:4px}.file-icon{color:#888;margin-right:4px}
+.breadcrumb{color:#6c5ce7;font-size:13px;margin-bottom:8px;word-break:break-all}
+.breadcrumb a{color:#6c5ce7;text-decoration:none;cursor:pointer}.breadcrumb a:hover{text-decoration:underline}
+.file-browser{max-height:350px;overflow-y:auto}
+.env-table{max-height:300px;overflow-y:auto}
+.backup-list{max-height:250px;overflow-y:auto}
+.net-btns{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
+.net-btns button{padding:4px 10px;background:#252540;border:1px solid #333;border-radius:6px;color:#ccc;font-size:11px;cursor:pointer}
+.net-btns button:hover{background:#333;color:#fff}
 </style>
 </head>
 <body>
@@ -1969,6 +2022,156 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
     </div>
     <div id="actionStatus" style="margin-top:8px;font-size:12px;color:#888"></div>
   </div>
+
+  <!-- ====== NEW ADMIN FEATURES ====== -->
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('system')">
+      <h2>🖥 System Dashboard</h2>
+      <span class="arrow open" id="arrow-system">▼</span>
+    </div>
+    <div id="section-system" class="section-content">
+      <div id="sysContent"><div class="empty-state">Loading system info...</div></div>
+      <div class="btn-row"><button class="btn" onclick="loadSystemInfo()">🔄 Refresh</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('config')">
+      <h2>⚙ Config Editor</h2>
+      <span class="arrow" id="arrow-config">▶</span>
+    </div>
+    <div id="section-config" class="section-content" style="display:none">
+      <div class="toolbar">
+        <span style="color:#888;font-size:11px" id="configMeta"></span>
+        <button class="btn" onclick="loadConfig()">📂 Load</button>
+        <button class="btn btn-danger" onclick="saveConfig()">💾 Save</button>
+      </div>
+      <textarea id="configEditor" style="width:100%;height:250px;background:#0a0a0a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-family:monospace;font-size:12px;padding:10px;resize:vertical;outline:none" spellcheck="false"></textarea>
+      <div id="configStatus" style="margin-top:6px;font-size:12px;color:#888"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('logs')">
+      <h2>📋 Logs Viewer</h2>
+      <span class="arrow" id="arrow-logs">▶</span>
+    </div>
+    <div id="section-logs" class="section-content" style="display:none">
+      <div class="toolbar">
+        <input id="logFilter" placeholder="Filter logs..." onkeyup="loadLogs()">
+        <select id="logLines" onchange="loadLogs()" style="background:#1e1e38;border:1px solid #333;border-radius:6px;color:#fff;padding:4px 8px;font-size:12px">
+          <option value="50">50 lines</option><option value="100" selected>100 lines</option><option value="200">200 lines</option>
+        </select>
+        <button class="btn" onclick="loadLogs()">🔄 Refresh</button>
+        <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
+      </div>
+      <div id="logViewer" class="log-viewer">Loading...</div>
+      <div style="margin-top:4px;font-size:11px;color:#666" id="logMeta"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('sessions')">
+      <h2>💬 Session Manager</h2>
+      <span class="arrow" id="arrow-sessions">▶</span>
+    </div>
+    <div id="section-sessions" class="section-content" style="display:none">
+      <div id="sessionList"><div class="empty-state">Loading sessions...</div></div>
+      <div class="btn-row">
+        <button class="btn" onclick="loadSessions()">🔄 Refresh</button>
+        <button class="btn btn-danger" onclick="cleanupSessions()">🧹 Cleanup Empty</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('env')">
+      <h2>🔐 Environment Variables</h2>
+      <span class="arrow" id="arrow-env">▶</span>
+    </div>
+    <div id="section-env" class="section-content" style="display:none">
+      <div class="toolbar">
+        <input id="envFilter" placeholder="Search..." onkeyup="loadEnv()">
+        <button class="btn" onclick="loadEnv()">🔄 Refresh</button>
+      </div>
+      <div id="envList" class="env-table"><div class="empty-state">Loading...</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('network')">
+      <h2>🌐 Network Tools</h2>
+      <span class="arrow" id="arrow-network">▶</span>
+    </div>
+    <div id="section-network" class="section-content" style="display:none">
+      <div class="net-btns" id="netTargets"></div>
+      <div class="toolbar">
+        <input id="customUrl" placeholder="Custom URL to test..." onkeydown="if(event.key==='Enter')testNetwork()">
+        <button class="btn" onclick="testNetwork()">▶ Test</button>
+      </div>
+      <div id="netResult" class="net-result"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('benchmark')">
+      <h2>📊 Provider Benchmark</h2>
+      <span class="arrow" id="arrow-benchmark">▶</span>
+    </div>
+    <div id="section-benchmark" class="section-content" style="display:none">
+      <div id="benchContent"><div class="empty-state">Click "Run Benchmark" to test all providers.</div></div>
+      <div class="btn-row"><button class="btn" onclick="runBenchmark()">🚀 Run Benchmark</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('files')">
+      <h2>📁 File Browser</h2>
+      <span class="arrow" id="arrow-files">▶</span>
+    </div>
+    <div id="section-files" class="section-content" style="display:none">
+      <div class="toolbar">
+        <input id="filePath" value="/opt/render" onkeydown="if(event.key==='Enter')loadFiles()" style="flex:3">
+        <button class="btn" onclick="loadFiles()">📂 Browse</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('filePath').value='/opt/render/kimi-code-server';loadFiles()">📁 Server</button>
+      </div>
+      <div class="breadcrumb" id="fileBreadcrumb"></div>
+      <div id="fileList" class="file-browser"><div class="empty-state">Enter a path and click Browse.</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('daemon')">
+      <h2>⚡ Daemon Control</h2>
+      <span class="arrow" id="arrow-daemon">▶</span>
+    </div>
+    <div id="section-daemon" class="section-content" style="display:none">
+      <div id="daemonContent"><div class="empty-state">Loading daemon status...</div></div>
+      <div class="btn-row">
+        <button class="btn" onclick="loadDaemonStatus()">🔄 Refresh</button>
+        <button class="btn" onclick="daemonAction('restart')">🔄 Restart</button>
+        <button class="btn btn-danger" onclick="daemonAction('stop')">⏹ Stop</button>
+        <button class="btn btn-secondary" onclick="daemonAction('start')">▶ Start</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header" onclick="toggleSection('backup')">
+      <h2>💾 Backup Manager</h2>
+      <span class="arrow" id="arrow-backup">▶</span>
+    </div>
+    <div id="section-backup" class="section-content" style="display:none">
+      <div id="backupContent"><div class="empty-state">Loading backup history...</div></div>
+      <div class="btn-row">
+        <button class="btn" onclick="loadBackupHistory()">🔄 Refresh</button>
+        <button class="btn" onclick="backupNow()">💾 Backup Now</button>
+        <button class="btn" onclick="uploadToPentaract()">☁ Upload to Pentaract</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div id="modelsModal" class="modal" onclick="if(event.target===this)closeModal()">
@@ -2103,6 +2306,298 @@ async function restoreFrom(src){
     const d=await r.json();
     $('actionStatus').textContent=d.message||'Restore '+(d.success?'done':'failed');
   }catch(e){$('actionStatus').textContent='Error: '+e.message}
+}
+
+// ====== NEW ADMIN UI FUNCTIONS ======
+
+function toggleSection(id){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const h=el.previousElementSibling;
+  if(!h) return;
+  const hidden=el.style.display==='none'||!el.style.display;
+  el.style.display=hidden?'block':'none';
+  const arrow=h.querySelector('.arrow');
+  if(arrow) arrow.textContent=hidden?'▼':'▶';
+}
+
+async function loadSystemInfo(){
+  try{
+    const r=await fetch('/kimi-admin/system');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const info=Object.entries(d.data||{}).map(([k,v])=>`<div class="stat-box"><strong>${k}</strong><span>${v}</span></div>`).join('');
+    document.getElementById('sysInfoContent').innerHTML='<div class="grid-2">'+info+'</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function loadConfig(){
+  try{
+    const r=await fetch('/kimi-admin/config');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    document.getElementById('configEditor').value=d.data||d.config||'';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function saveConfig(){
+  const textarea=document.getElementById('configEditor');
+  try{
+    const r=await fetch('/kimi-admin/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:textarea.value})});
+    const d=await r.json();
+    showToast(d.message||(d.success?'Saved!':'Failed'));
+  }catch(e){showToast(e.message,true)}
+}
+
+async function loadLogs(){
+  try{
+    const filter=document.getElementById('logFilter')?.value||'';
+    const lines=document.getElementById('logLines')?.value||'50';
+    const r=await fetch('/kimi-admin/logs?lines='+lines+(filter?'&filter='+encodeURIComponent(filter):''));
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const logs=(d.data||d.logs||[]).map(l=>'<div>'+escapeHtml(typeof l==='string'?l:JSON.stringify(l))+'</div>').join('');
+    document.getElementById('logViewer').innerHTML=logs||'<div class="muted">No logs</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+function clearLogs(){
+  document.getElementById('logViewer').innerHTML='<div class="muted">Cleared</div>';
+}
+
+async function loadSessions(){
+  try{
+    const r=await fetch('/kimi-admin/sessions');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const list=d.data||d.sessions||[];
+    const html=list.map(s=>{
+      const id=s.id||s.sessionId||'?';
+      const expires=new Date(s.expiresAt||s.expires||Date.now()).toLocaleString();
+      return '<div class="session-item" id="sess-'+id+'">'+
+        '<div><strong>'+escapeHtml(id)+'</strong>'+
+        '<br><span class="muted">Created: '+new Date(s.createdAt||s.created||Date.now()).toLocaleString()+
+        ' | Expires: '+expires+' | Age: '+(s.age||'?')+'s</span></div>'+
+        '<button class="btn btn-sm btn-danger" onclick="deleteSession(\''+id+'\')">Delete</button></div>';
+    }).join('');
+    document.getElementById('sessionList').innerHTML=html||'<div class="muted">No active sessions</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function deleteSession(id){
+  if(!confirm('Delete session '+id+'?')) return;
+  try{
+    const r=await fetch('/kimi-admin/sessions?id='+encodeURIComponent(id),{method:'DELETE'});
+    const d=await r.json();
+    showToast(d.message||'Deleted');
+    loadSessions();
+  }catch(e){showToast(e.message,true)}
+}
+
+async function cleanupSessions(){
+  try{
+    const r=await fetch('/kimi-admin/sessions/cleanup',{method:'POST'});
+    const d=await r.json();
+    showToast(d.message||'Cleaned up');
+    loadSessions();
+  }catch(e){showToast(e.message,true)}
+}
+
+async function loadEnv(){
+  try{
+    const r=await fetch('/kimi-admin/env');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const env=d.data||d.env||{};
+    const html=Object.entries(env).map(([k,v])=>{
+      const val=typeof v==='string'?v:JSON.stringify(v);
+      const masked='*'.repeat(Math.min(val.length,20));
+      return '<div class="env-row"><code>'+escapeHtml(k)+'</code><span class="env-val" data-full="'+escapeHtml(val)+'">'+masked+'</span><button class="btn btn-xs" onclick="toggleEnv(this)">👁</button></div>';
+    }).join('');
+    document.getElementById('envContent').innerHTML=html;
+  }catch(e){showToast(e.message,true)}
+}
+
+function toggleEnv(btn){
+  const span=btn.previousElementSibling;
+  if(!span) return;
+  if(span.textContent.includes('*')){
+    span.textContent=span.dataset.full;
+    btn.textContent='🔒';
+  }else{
+    const masked='*'.repeat(Math.min((span.dataset.full||'').length,20));
+    span.textContent=masked;
+    btn.textContent='👁';
+  }
+}
+
+async function loadNetTargets(){
+  try{
+    const r=await fetch('/kimi-admin/network/targets');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const targets=d.data||d.targets||['https://google.com','https://github.com','https://npmjs.com'];
+    const html=targets.map(t=>'<button class="btn net-btn" onclick="testNetwork(\''+encodeURIComponent(t)+'\')">'+escapeHtml(t)+'</button>').join('');
+    document.getElementById('netTargets').innerHTML=html||'<div class="muted">No targets</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function testNetwork(encTarget){
+  const target=decodeURIComponent(encTarget);
+  const resultDiv=document.getElementById('netResult');
+  resultDiv.innerHTML='<div class="muted">Testing '+escapeHtml(target)+'...</div>';
+  try{
+    const r=await fetch('/kimi-admin/network/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});
+    const d=await r.json();
+    if(!d.success){resultDiv.innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Failed')+'</div>';return;}
+    const res=d.data||d.result||{};
+    const html='<div class="net-result success">'+
+      '<div><strong>Target:</strong> '+escapeHtml(res.target||target)+'</div>'+
+      '<div><strong>Status:</strong> '+(res.statusCode||res.status||'?')+'</div>'+
+      '<div><strong>Time:</strong> '+(res.time||res.duration||'?')+'ms</div>'+
+      '<div><strong>Size:</strong> '+formatSize(res.size||res.bodySize||0)+'</div>'+
+      (res.error?'<div><strong>Error:</strong> '+escapeHtml(res.error)+'</div>':'')+
+      '</div>';
+    resultDiv.innerHTML=html;
+  }catch(e){resultDiv.innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
+}
+
+async function runBenchmark(){
+  const btn=event&&event.target?event.target:document.querySelector('#benchmarkBtn');
+  if(btn){btn.disabled=true;btn.textContent='Running...';}
+  document.getElementById('benchResult').innerHTML='<div class="muted">Running benchmark...</div>';
+  try{
+    const r=await fetch('/kimi-admin/benchmark',{method:'POST'});
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);document.getElementById('benchResult').innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Benchmark failed')+'</div>';return;}
+    const res=d.data||d.result||{};
+    const html='<table class="bench-table"><tr><th>Test</th><th>Result</th></tr>'+
+      Object.entries(res).map(([k,v])=>'<tr><td>'+escapeHtml(k)+'</td><td>'+(typeof v==='object'?escapeHtml(JSON.stringify(v)):escapeHtml(String(v)))+'</td></tr>').join('')+
+      '</table>';
+    document.getElementById('benchResult').innerHTML=html;
+  }catch(e){document.getElementById('benchResult').innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
+  finally{if(btn){btn.disabled=false;btn.textContent='Run Benchmark'}}
+}
+
+async function loadFiles(path){
+  const p=path||'';
+  const container=document.getElementById('fileBrowser');
+  container.innerHTML='<div class="muted">Loading...</div>';
+  try{
+    const r=await fetch('/kimi-admin/files?path='+encodeURIComponent(p));
+    const d=await r.json();
+    if(!d.success){container.innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Failed')+'</div>';return;}
+    const entries=d.data||d.entries||d.files||[];
+    let html='<div class="file-current"><strong>📁 </strong><a href="#" onclick="loadFiles(\'\');return false">/</a>';
+    if(p){
+      const parts=p.split('/').filter(Boolean);
+      let acc='';
+      parts.forEach(part=>{
+        acc+=part+'/';
+        html+='<a href="#" onclick="loadFiles(\''+acc+'\');return false">'+escapeHtml(part)+'</a>/';
+      });
+    }
+    html+='</div><div class="file-list">';
+    entries.forEach(e=>{
+      const name=e.name||e;
+      const isDir=e.isDirectory||e.type==='directory'||(typeof e==='object'&&!e.type);
+      const size=e.size||e.fileSize||0;
+      if(isDir){
+        html+='<div class="file-item dir" onclick="loadFiles(\''+escapeHtml(p+(p?'/':'')+name)+'\')">📁 '+escapeHtml(name)+'</div>';
+      }else{
+        html+='<div class="file-item file">📄 '+escapeHtml(name)+' <span class="muted">'+formatSize(size)+'</span></div>';
+      }
+    });
+    html+='</div>';
+    container.innerHTML=html;
+    document.getElementById('filePath').value=p;
+  }catch(e){container.innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
+}
+
+async function loadDaemonStatus(){
+  try{
+    const r=await fetch('/kimi-admin/daemon');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const info=d.data||d.status||{};
+    const html=Object.entries(info).map(([k,v])=>'<div class="stat-box"><strong>'+escapeHtml(k)+'</strong><span>'+escapeHtml(String(v))+'</span></div>').join('');
+    document.getElementById('daemonContent').innerHTML='<div class="grid-2">'+html+'</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function daemonAction(action){
+  const endpoint=action==='restart'?'/kimi-admin/daemon/restart':
+    action==='stop'?'/kimi-admin/daemon/stop':
+    action==='start'?'/kimi-admin/daemon/start':'';
+  if(!endpoint) return;
+  if(action==='restart'&&!confirm('Restart daemon?')) return;
+  if(action==='stop'&&!confirm('Stop daemon?')) return;
+  try{
+    const r=await fetch(endpoint,{method:'POST'});
+    const d=await r.json();
+    showToast(d.message||(d.success?action+' success':action+' failed'));
+    setTimeout(loadDaemonStatus,2000);
+  }catch(e){showToast(e.message,true)}
+}
+
+async function loadBackupHistory(){
+  try{
+    const r=await fetch('/kimi-admin/backup/history');
+    const d=await r.json();
+    if(!d.success){showToast(d.error||'Failed',true);return;}
+    const list=d.data||d.history||d.backups||[];
+    const html=list.map(b=>{
+      const name=b.name||b.filename||b.file||'?';
+      const date=b.date||b.createdAt||b.timestamp||'';
+      const size=b.size||b.fileSize||0;
+      return '<div class="backup-item">'+
+        '<span><strong>'+escapeHtml(name)+'</strong>'+(date?' <span class="muted">'+new Date(date).toLocaleString()+'</span>':'')+' <span class="muted">'+formatSize(size)+'</span></span>'+
+        '<div class="backup-actions">'+
+        '<button class="btn btn-sm" onclick="window.open(\'/kimi-admin/backup/download?name='+encodeURIComponent(name)+'\')">⬇ Download</button>'+
+        '<button class="btn btn-sm btn-danger" onclick="deleteBackup(\''+encodeURIComponent(name)+'\')">🗑 Delete</button>'+
+        '<button class="btn btn-sm" onclick="uploadToPentaract(\''+encodeURIComponent(name)+'\')">☁ Upload to Pentaract</button>'+
+        '</div></div>';
+    }).join('');
+    document.getElementById('backupList').innerHTML=html||'<div class="muted">No backups</div>';
+  }catch(e){showToast(e.message,true)}
+}
+
+async function deleteBackup(name){
+  const n=decodeURIComponent(name);
+  if(!confirm('Delete backup '+n+'?')) return;
+  try{
+    const r=await fetch('/kimi-admin/backup/history',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
+    const d=await r.json();
+    showToast(d.message||'Deleted');
+    loadBackupHistory();
+  }catch(e){showToast(e.message,true)}
+}
+
+async function uploadToPentaract(name){
+  const n=decodeURIComponent(name);
+  showToast('Uploading '+n+' to Pentaract...');
+  try{
+    const r=await fetch('/kimi-admin/backup/upload-pentaract',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:n})});
+    const d=await r.json();
+    showToast(d.message||(d.success?'Uploaded!':'Upload failed'));
+    loadBackupHistory();
+  }catch(e){showToast(e.message,true)}
+}
+
+// Helper: escape HTML
+function escapeHtml(str){
+  if(!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+// Helper: format bytes
+function formatSize(bytes){
+  if(!bytes||bytes===0) return '0 B';
+  const units=['B','KB','MB','GB','TB'];
+  let i=0;
+  let b=bytes;
+  while(b>=1024&&i<units.length-1){b/=1024;i++;}
+  return b.toFixed(1)+' '+units[i];
 }
 
 loadProviders();
@@ -2507,6 +3002,397 @@ loadProviders();
         ? 'Tunnel available at: ' + tunnelUrl
         : 'Tunnel not yet ready'
     }));
+  }
+
+  // ====== ADMIN API — System Dashboard ======
+  // GET /kimi-admin/system — OS, memory, disk, CPU, process info
+  if (req.url === '/kimi-admin/system' && req.method === 'GET') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const cpus = os.cpus();
+      let rootDisk = {}, kimiDisk = {};
+      try {
+        const df = require('child_process').execSync('df -k / ' + KIMI_HOME + ' 2>/dev/null || df -k /', { timeout: 5000, encoding: 'utf8' });
+        const lines = df.trim().split('\n').filter(l => l.includes('/'));
+        lines.forEach(l => {
+          const parts = l.trim().split(/\s+/);
+          if (parts.length >= 6) {
+            const total = parseInt(parts[1]) * 1024;
+            const used = parseInt(parts[2]) * 1024;
+            const avail = parseInt(parts[3]) * 1024;
+            const pct = parseFloat(parts[4].replace('%', ''));
+            const mnt = parts[5];
+            if (mnt === '/') rootDisk = { total, used, avail, pct, mount: mnt };
+            if (mnt === KIMI_HOME || (mnt !== '/' && !rootDisk.mount)) kimiDisk = { total, used, avail, pct, mount: mnt };
+          }
+        });
+      } catch(e) {}
+      return res.end(JSON.stringify({
+        success: true,
+        os: {
+          hostname: os.hostname(),
+          platform: os.platform(),
+          arch: os.arch(),
+          release: os.release(),
+          uptime: os.uptime(),
+          uptime_human: formatUptime(os.uptime()),
+          loadavg: os.loadavg(),
+          cpus: { count: cpus.length, model: cpus[0]?.model || 'unknown', speed_mhz: cpus[0]?.speed || 0 }
+        },
+        memory: {
+          total: os.totalmem(), free: os.freemem(), used: os.totalmem() - os.freemem(),
+          used_pct: ((1 - os.freemem() / os.totalmem()) * 100).toFixed(1),
+          total_human: formatSize(os.totalmem()), free_human: formatSize(os.freemem()), used_human: formatSize(os.totalmem() - os.freemem())
+        },
+        disk: { root: rootDisk, kimi_home: kimiDisk },
+        process: {
+          pid: process.pid, uptime: process.uptime(), uptime_human: formatUptime(process.uptime()),
+          memory: process.memoryUsage(), node_version: process.version, platform: process.platform, arch: process.arch
+        },
+        server: { port: PORT, kimi_port: KIMI_PORT, daemon_alive: daemonAlive, tunnel_url: tunnelUrl, public_url: myPublicUrl }
+      }));
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // GET/POST /kimi-admin/config — Config Editor
+  if (req.url === '/kimi-admin/config' && req.method === 'GET') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const configPath = getConfigPath();
+      const content = fs.readFileSync(configPath, 'utf8');
+      const stat = fs.statSync(configPath);
+      return res.end(JSON.stringify({ success: true, path: configPath, size: stat.size, modified: stat.mtime, content }));
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+  if (req.url === '/kimi-admin/config' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        if (!data.content) throw new Error('content is required');
+        const configPath = getConfigPath();
+        const backupPath = configPath + '.bak.' + Date.now();
+        try { fs.copyFileSync(configPath, backupPath); } catch(e) {}
+        fs.writeFileSync(configPath, data.content, 'utf8');
+        const restarted = restartKimiDaemon();
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: true, backup_path: backupPath, daemon_restarting: restarted, message: 'Config saved. Daemon restarting.' }));
+      } catch(e) {
+        res.writeHead(500, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
+  }
+
+  // GET /kimi-admin/logs — Logs Viewer
+  if (req.url === '/kimi-admin/logs' && req.method === 'GET') {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const lines = parseInt(urlObj.searchParams.get('lines')) || 100;
+    const filter = urlObj.searchParams.get('filter') || '';
+    let logs = debugLog;
+    if (filter) logs = logs.filter(l => l.toLowerCase().includes(filter.toLowerCase()));
+    const sliced = logs.slice(-Math.min(lines, logs.length));
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    return res.end(JSON.stringify({ success: true, total: logs.length, returned: sliced.length, lines: sliced, filter: filter || null }));
+  }
+
+  // GET /kimi-admin/sessions — Session Manager
+  if (req.url === '/kimi-admin/sessions' && req.method === 'GET') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const sessionsDir = path.join(KIMI_HOME, 'sessions');
+      const sessions = [];
+      if (fs.existsSync(sessionsDir)) {
+        const entries = fs.readdirSync(sessionsDir, { withFileTypes: true });
+        entries.filter(d => d.isDirectory()).forEach(dir => {
+          const dirPath = path.join(sessionsDir, dir.name);
+          const stat = fs.statSync(dirPath);
+          let fileCount = 0, totalSize = 0;
+          try {
+            const walkDir = (p) => {
+              const files = fs.readdirSync(p, { withFileTypes: true });
+              files.forEach(f => {
+                if (f.isDirectory()) walkDir(path.join(p, f.name));
+                else { fileCount++; totalSize += fs.statSync(path.join(p, f.name)).size; }
+              });
+            };
+            walkDir(dirPath);
+          } catch(e) {}
+          sessions.push({ id: dir.name, created: stat.birthtime, modified: stat.mtime, file_count: fileCount, size_kb: (totalSize / 1024).toFixed(1) });
+        });
+      }
+      return res.end(JSON.stringify({ success: true, sessions, count: sessions.length }));
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // DELETE /kimi-admin/sessions/:id — delete a session
+  const sessionDelMatch = req.url.match(/^\/kimi-admin\/sessions\/(.+)$/);
+  if (sessionDelMatch && req.method === 'DELETE') {
+    const sessionId = decodeURIComponent(sessionDelMatch[1]);
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const dirPath = path.join(KIMI_HOME, 'sessions', sessionId);
+      if (!fs.existsSync(dirPath)) throw new Error('Session not found');
+      fs.rmSync(dirPath, { recursive: true, force: true });
+      return res.end(JSON.stringify({ success: true, message: 'Session "' + sessionId + '" deleted.' }));
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // GET /kimi-admin/env — Environment Variables
+  if (req.url === '/kimi-admin/env' && req.method === 'GET') {
+    const safeKeys = ['PORT','KIMI_PORT','NODE_ENV','NODE_VERSION','HOME','USER','KIMI_CODE_HOME','KIMI_CODE_PASSWORD','PENTARACT_URL','PENTARACT_EMAIL','BACKUP_STORAGE_ID','BACKUP_INTERVAL_MIN','RENDER_EXTERNAL_URL','RENDER_INTERNAL_URL','RENDER_INSTANCE_ID','RENDER_SERVICE_NAME','RENDER_GIT_BRANCH','RENDER_GIT_COMMIT','RENDER_DEPLOY_ID','CLOUDFLARE_TUNNEL_TOKEN','CLOUDFLARE_TUNNEL_URL','PGHOST','PGPORT','PGDATABASE','PGUSER','PGPASSWORD'];
+    const vars = {};
+    safeKeys.forEach(k => {
+      if (process.env[k] !== undefined) {
+        let val = process.env[k];
+        if (k.toLowerCase().includes('key') || k.toLowerCase().includes('token') || k.toLowerCase().includes('password') || k.toLowerCase().includes('secret')) {
+          val = val.substring(0, 4) + '...' + val.substring(val.length - 4);
+        }
+        vars[k] = val;
+      }
+    });
+    Object.keys(process.env).forEach(k => {
+      if ((k.startsWith('KIMI_') || k.startsWith('PENTARACT_')) && !vars[k]) {
+        let val = process.env[k];
+        if (k.toLowerCase().includes('key') || k.toLowerCase().includes('token') || k.toLowerCase().includes('password') || k.toLowerCase().includes('secret')) {
+          val = val.substring(0, 4) + '...' + val.substring(val.length - 4);
+        }
+        vars[k] = val;
+      }
+    });
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    return res.end(JSON.stringify({ success: true, vars, count: Object.keys(vars).length }));
+  }
+
+  // POST /kimi-admin/network/test — Network Tools
+  if (req.url === '/kimi-admin/network/test' && req.method === 'POST') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      (async () => {
+        try {
+          const data = JSON.parse(body);
+          const target = data.target || 'https://pentaract-i2os.onrender.com';
+          const start = Date.now();
+          const result = await new Promise((resolve) => {
+            const protocol = target.startsWith('https') ? https : http;
+            const req2 = protocol.get(target, { timeout: 10000 }, (res2) => {
+              let chunks = [];
+              res2.on('data', c => { chunks.push(c); if (chunks.length > 5) req2.destroy(); });
+              res2.on('end', () => {
+                resolve({ success: true, url: target, status: res2.statusCode, latency_ms: Date.now() - start, headers: { 'content-type': res2.headers['content-type'] || null, server: res2.headers.server || null } });
+              });
+            });
+            req2.on('error', (e) => resolve({ success: false, url: target, error: e.message, latency_ms: Date.now() - start }));
+            req2.on('timeout', () => { req2.destroy(); resolve({ success: false, url: target, error: 'Timeout (10s)', latency_ms: 10000 }); });
+          });
+          res.writeHead(200, {'Content-Type': 'application/json'});
+          return res.end(JSON.stringify(result));
+        } catch(e) {
+          res.writeHead(500, {'Content-Type': 'application/json'});
+          return res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+      })();
+    });
+    return;
+  }
+
+  // GET /kimi-admin/network/targets — default network targets
+  if (req.url === '/kimi-admin/network/targets' && req.method === 'GET') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    return res.end(JSON.stringify({
+      success: true,
+      targets: [
+        { label: 'Pentaract API', url: PENTARACT_URL },
+        { label: 'Kimi Daemon', url: 'http://127.0.0.1:' + KIMI_PORT + '/health' },
+        { label: 'Google', url: 'https://google.com' },
+        { label: 'Cloudflare', url: 'https://cloudflare.com' },
+        { label: 'Render Status', url: 'https://status.render.com' },
+        { label: 'GitHub API', url: 'https://api.github.com' }
+      ]
+    }));
+  }
+
+  // POST /kimi-admin/benchmark — Provider Benchmark
+  if (req.url === '/kimi-admin/benchmark' && req.method === 'POST') {
+    (async () => {
+      try {
+        const providers = readProvidersFromConfig();
+        const results = [];
+        for (const p of Object.values(providers)) {
+          const start = Date.now();
+          try {
+            const models = await fetchModels(p.baseUrl, p.apiKey || '');
+            results.push({ id: p.id, type: p.type, base_url: p.baseUrl, latency_ms: Date.now() - start, status: 'ok', models_found: models.length });
+          } catch(e) {
+            results.push({ id: p.id, type: p.type, base_url: p.baseUrl, latency_ms: Date.now() - start, status: 'error', error: e.message });
+          }
+        }
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: true, results, count: results.length }));
+      } catch(e) {
+        res.writeHead(500, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    })();
+    return;
+  }
+
+  // GET /kimi-admin/files — File Browser
+  if (req.url.startsWith('/kimi-admin/files') && req.method === 'GET') {
+    const urlObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+    let dirPath = urlObj.searchParams.get('path') || '/opt/render';
+    const download = urlObj.searchParams.get('download');
+    if (!dirPath.startsWith('/opt/render')) dirPath = '/opt/render';
+    if (download) {
+      const filePath = path.join(dirPath, download);
+      if (!filePath.startsWith('/opt/render') || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+        res.writeHead(404, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: false, error: 'File not found or access denied' }));
+      }
+      const stat = fs.statSync(filePath);
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + path.basename(filePath) + '"', 'Content-Length': stat.size });
+      return res.end(fs.readFileSync(filePath));
+    }
+    try {
+      if (!fs.existsSync(dirPath)) throw new Error('Directory not found');
+      const stat = fs.statSync(dirPath);
+      if (stat.isDirectory()) {
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        const files = entries.map(e => {
+          const fullPath = path.join(dirPath, e.name);
+          let s;
+          try { s = fs.statSync(fullPath); } catch(e) { return null; }
+          return { name: e.name, type: e.isDirectory() ? 'dir' : 'file', size: s.size, size_human: formatSize(s.size), modified: s.mtime };
+        }).filter(Boolean);
+        files.sort((a, b) => (a.type === 'dir' ? 0 : 1) - (b.type === 'dir' ? 0 : 1) || a.name.localeCompare(b.name));
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: true, path: dirPath, parent: path.dirname(dirPath), files, count: files.length }));
+      } else {
+        return res.end(JSON.stringify({ success: true, path: dirPath, type: 'file', name: path.basename(dirPath), size_human: formatSize(stat.size), modified: stat.mtime }));
+      }
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // GET /kimi-admin/daemon — Daemon Control Panel
+  if (req.url === '/kimi-admin/daemon' && req.method === 'GET') {
+    const mem = process.memoryUsage();
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    return res.end(JSON.stringify({
+      success: true,
+      daemon: {
+        alive: daemonAlive, process_alive: kimiProc !== null && !kimiProc.killed,
+        pid: kimiProc?.pid || null, port: KIMI_PORT, server_port: PORT,
+        uptime: process.uptime(), uptime_human: formatUptime(process.uptime()),
+        restart_count: daemonFailCount,
+        memory: { rss: mem.rss, rss_human: formatSize(mem.rss), heap_total: mem.heapTotal, heap_used: mem.heapUsed, heap_used_pct: ((mem.heapUsed / mem.heapTotal) * 100).toFixed(1) },
+        tunnel: { url: tunnelUrl, alive: tunnelProc !== null && !tunnelProc.killed },
+        backup: { last_status: lastBackupStatus, last_time: lastBackupTime, in_progress: backupInProgress }
+      }
+    }));
+  }
+
+  // POST /kimi-admin/daemon/:action — daemon control actions
+  const daemonActionMatch = req.url.match(/^\/kimi-admin\/daemon\/(restart|stop|start)$/);
+  if (daemonActionMatch && req.method === 'POST') {
+    const action = daemonActionMatch[1];
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      if (action === 'restart') {
+        const ok = restartKimiDaemon();
+        return res.end(JSON.stringify({ success: ok, message: ok ? 'Daemon restart initiated' : 'Daemon not running' }));
+      } else if (action === 'stop') {
+        if (kimiProc && !kimiProc.killed) { kimiProc.kill('SIGTERM'); kimiProc = null; daemonAlive = false; return res.end(JSON.stringify({ success: true, message: 'Daemon stopped' })); }
+        return res.end(JSON.stringify({ success: false, message: 'Daemon not running' }));
+      } else if (action === 'start') {
+        if (kimiProc && !kimiProc.killed) return res.end(JSON.stringify({ success: true, message: 'Daemon already running' }));
+        spawnKimiProcess();
+        return res.end(JSON.stringify({ success: true, message: 'Daemon start initiated' }));
+      }
+    } catch(e) {
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // GET /kimi-admin/backup/history — Backup history
+  if (req.url === '/kimi-admin/backup/history' && req.method === 'GET') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const backups = [];
+      if (fs.existsSync(LOCAL_BACKUP_DIR)) {
+        fs.readdirSync(LOCAL_BACKUP_DIR).filter(f => !f.endsWith('.tmp')).forEach(f => {
+          const fp = path.join(LOCAL_BACKUP_DIR, f);
+          try { const s = fs.statSync(fp); backups.push({ name: f, path: fp, size: s.size, size_human: formatSize(s.size), created: s.birthtime || s.mtime, modified: s.mtime }); } catch(e) {}
+        });
+        backups.sort((a, b) => new Date(b.created) - new Date(a.created));
+      }
+      return res.end(JSON.stringify({ success: true, backups, count: backups.length }));
+    } catch(e) {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // GET /kimi-admin/backup/download — download a backup file
+  if (req.url.startsWith('/kimi-admin/backup/download') && req.method === 'GET') {
+    const urlObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+    const name = urlObj.searchParams.get('name');
+    if (!name) { res.writeHead(400); return res.end(JSON.stringify({ success: false, error: 'name parameter required' })); }
+    const filePath = path.join(LOCAL_BACKUP_DIR, name);
+    if (!filePath.startsWith(LOCAL_BACKUP_DIR) || !fs.existsSync(filePath)) { res.writeHead(404); return res.end(JSON.stringify({ success: false, error: 'File not found' })); }
+    const stat = fs.statSync(filePath);
+    res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="' + name + '"', 'Content-Length': stat.size });
+    return res.end(fs.readFileSync(filePath));
+  }
+
+  // POST /kimi-admin/backup/upload-pentaract — force upload to pentaract
+  if (req.url === '/kimi-admin/backup/upload-pentaract' && req.method === 'POST') {
+    res.writeHead(200, {'Content-Type': 'application/json'});
+    try {
+      const ok = performBackup();
+      return res.end(JSON.stringify({ success: ok, status: lastBackupStatus, message: ok ? 'Backup uploaded to Pentaract' : 'Backup failed' }));
+    } catch(e) {
+      return res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+  }
+
+  // DELETE /kimi-admin/backup/history — delete a backup file
+  if (req.url === '/kimi-admin/backup/history' && req.method === 'DELETE') {
+    let body = '';
+    req.on('data', c => body += c);
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        if (!data.name) throw new Error('name required');
+        const filePath = path.join(LOCAL_BACKUP_DIR, data.name);
+        if (!filePath.startsWith(LOCAL_BACKUP_DIR)) throw new Error('Access denied');
+        if (!fs.existsSync(filePath)) throw new Error('File not found');
+        fs.unlinkSync(filePath);
+        res.writeHead(200, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: true, message: 'Backup "' + data.name + '" deleted.' }));
+      } catch(e) {
+        res.writeHead(500, {'Content-Type': 'application/json'});
+        return res.end(JSON.stringify({ success: false, error: e.message }));
+      }
+    });
+    return;
   }
 
   // Proxy to Kimi daemon
