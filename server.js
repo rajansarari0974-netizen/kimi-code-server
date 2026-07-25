@@ -3127,7 +3127,7 @@ loadProviders();
   }
 
   // GET /kimi-admin/logs — Logs Viewer
-  if (req.url === '/kimi-admin/logs' && req.method === 'GET') {
+  if (req.url.startsWith('/kimi-admin/logs') && req.method === 'GET') {
     const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const lines = parseInt(urlObj.searchParams.get('lines')) || 100;
     const filter = urlObj.searchParams.get('filter') || '';
@@ -3170,10 +3170,16 @@ loadProviders();
     }
   }
 
-  // DELETE /kimi-admin/sessions/:id — delete a session
-  const sessionDelMatch = req.url.match(/^\/kimi-admin\/sessions\/(.+)$/);
+  // DELETE /kimi-admin/sessions/:id or ?id=xxx — delete a session
+  const sessionDelMatch = req.url.match(/^\/kimi-admin\/sessions\/([^?]+)/);
+  let sessionId = null;
   if (sessionDelMatch && req.method === 'DELETE') {
-    const sessionId = decodeURIComponent(sessionDelMatch[1]);
+    sessionId = decodeURIComponent(sessionDelMatch[1]);
+  } else if (req.url.startsWith('/kimi-admin/sessions') && req.method === 'DELETE') {
+    const urlObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
+    sessionId = urlObj.searchParams.get('id');
+  }
+  if (sessionId) {
     res.writeHead(200, {'Content-Type': 'application/json'});
     try {
       const dirPath = path.join(KIMI_HOME, 'sessions', sessionId);
