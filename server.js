@@ -197,10 +197,10 @@ function spawnKimiProcess() {
     KIMI_CODE_CORS_ORIGINS: 'https://kimicode.dpdns.org,https://kimi-code-server.onrender.com',
   };
 
-  // Use `server run` — never daemonizes, process stays alive
+  // Use `kimi web` — replaces deprecated `server run`
   const args = kimiBin === 'npx'
-    ? ['@moonshot-ai/kimi-code', 'server', 'run', '--daemon', '--port', String(KIMI_PORT), '--host', '0.0.0.0', '--insecure-no-tls']
-    : ['server', 'run', '--daemon', '--port', String(KIMI_PORT), '--host', '0.0.0.0', '--insecure-no-tls'];
+    ? ['@moonshot-ai/kimi-code', 'web', '--no-open', '--port', String(KIMI_PORT), '--host', '0.0.0.0']
+    : ['web', '--no-open', '--port', String(KIMI_PORT), '--host', '0.0.0.0'];
 
   log(`Starting Kimi: ${kimiBin} ${args.join(' ')}`);
   log(`KIMI_CODE_PASSWORD: ${kimiEnv.KIMI_CODE_PASSWORD ? 'SET ✓' : 'NOT SET'}`);
