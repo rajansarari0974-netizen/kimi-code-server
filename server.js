@@ -2326,8 +2326,17 @@ async function loadSystemInfo(){
     const r=await fetch('/kimi-admin/system');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const info=Object.entries(d.data||{}).map(([k,v])=>'<div class="stat-box"><strong>'+k+'</strong><span>'+v+'</span></div>').join('');
-    document.getElementById('sysInfoContent').innerHTML='<div class="grid-2">'+info+'</div>';
+    const sections=['os','memory','disk','process','server'];
+    const info=sections.map(function(key){
+      var val=d[key];
+      if(!val) return '';
+      if(typeof val==='object'){
+        var items=Object.entries(val).map(function(e){return '<div class="stat-box"><strong>'+e[0]+'</strong><span>'+escapeHtml(String(e[1]))+'</span></div>';}).join('');
+        return '<div class="card"><div class="card-header" style="cursor:default;padding:6px 10px"><h3 style="margin:0;font-size:14px">'+key.toUpperCase()+'</h3></div><div class="grid-2">'+items+'</div></div>';
+      }
+      return '<div class="stat-box"><strong>'+key+'</strong><span>'+escapeHtml(String(val))+'</span></div>';
+    }).join('');
+    document.getElementById('sysContent').innerHTML=info||'<div class="muted">No system info</div>';
   }catch(e){showToast(e.message,true)}
 }
 
@@ -2336,14 +2345,14 @@ async function loadConfig(){
     const r=await fetch('/kimi-admin/config');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    document.getElementById('configEditor').value=d.data||d.config||'';
+    document.getElementById('configEditor').value=d.content||'';
   }catch(e){showToast(e.message,true)}
 }
 
 async function saveConfig(){
   const textarea=document.getElementById('configEditor');
   try{
-    const r=await fetch('/kimi-admin/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:textarea.value})});
+    const r=await fetch('/kimi-admin/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content:textarea.value})});
     const d=await r.json();
     showToast(d.message||(d.success?'Saved!':'Failed'));
   }catch(e){showToast(e.message,true)}
@@ -2356,7 +2365,7 @@ async function loadLogs(){
     const r=await fetch('/kimi-admin/logs?lines='+lines+(filter?'&filter='+encodeURIComponent(filter):''));
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const logs=(d.data||d.logs||[]).map(l=>'<div>'+escapeHtml(typeof l==='string'?l:JSON.stringify(l))+'</div>').join('');
+    const logs=(d.lines||[]).map(l=>'<div>'+escapeHtml(typeof l==='string'?l:JSON.stringify(l))+'</div>').join('');
     document.getElementById('logViewer').innerHTML=logs||'<div class="muted">No logs</div>';
   }catch(e){showToast(e.message,true)}
 }
@@ -2370,7 +2379,7 @@ async function loadSessions(){
     const r=await fetch('/kimi-admin/sessions');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const list=d.data||d.sessions||[];
+    const list=d.sessions||[];
     const html=list.map(s=>{
       const id=s.id||s.sessionId||'?';
       const expires=new Date(s.expiresAt||s.expires||Date.now()).toLocaleString();
@@ -2408,13 +2417,13 @@ async function loadEnv(){
     const r=await fetch('/kimi-admin/env');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const env=d.data||d.env||{};
+    const env=d.vars||{};
     const html=Object.entries(env).map(([k,v])=>{
       const val=typeof v==='string'?v:JSON.stringify(v);
       const masked='*'.repeat(Math.min(val.length,20));
       return '<div class="env-row"><code>'+escapeHtml(k)+'</code><span class="env-val" data-full="'+escapeHtml(val)+'">'+masked+'</span><button class="btn btn-xs" onclick="toggleEnv(this)">👁</button></div>';
     }).join('');
-    document.getElementById('envContent').innerHTML=html;
+    document.getElementById('envList').innerHTML=html;
   }catch(e){showToast(e.message,true)}
 }
 
@@ -2436,8 +2445,12 @@ async function loadNetTargets(){
     const r=await fetch('/kimi-admin/network/targets');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const targets=d.data||d.targets||['https://google.com','https://github.com','https://npmjs.com'];
-    const html=targets.map(t=>'<button class="btn net-btn" onclick="testNetwork(\''+encodeURIComponent(t)+'\')">'+escapeHtml(t)+'</button>').join('');
+    const targets=d.targets||[{label:'Google',url:'https://google.com'},{label:'GitHub',url:'https://github.com'}];
+    const html=targets.map(t=>{
+      var label=t.label||t;
+      var url=t.url||t;
+      return '<button class="btn net-btn" onclick="testNetwork(\''+encodeURIComponent(url)+'\')">'+escapeHtml(label)+'</button>';
+    }).join('');
     document.getElementById('netTargets').innerHTML=html||'<div class="muted">No targets</div>';
   }catch(e){showToast(e.message,true)}
 }
@@ -2450,13 +2463,12 @@ async function testNetwork(encTarget){
     const r=await fetch('/kimi-admin/network/test',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({target})});
     const d=await r.json();
     if(!d.success){resultDiv.innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Failed')+'</div>';return;}
-    const res=d.data||d.result||{};
-    const html='<div class="net-result success">'+
-      '<div><strong>Target:</strong> '+escapeHtml(res.target||target)+'</div>'+
-      '<div><strong>Status:</strong> '+(res.statusCode||res.status||'?')+'</div>'+
-      '<div><strong>Time:</strong> '+(res.time||res.duration||'?')+'ms</div>'+
-      '<div><strong>Size:</strong> '+formatSize(res.size||res.bodySize||0)+'</div>'+
-      (res.error?'<div><strong>Error:</strong> '+escapeHtml(res.error)+'</div>':'')+
+    const html='<div class="net-result '+(d.success?'success':'error')+'">'+
+      '<div><strong>Target:</strong> '+escapeHtml(d.url||target)+'</div>'+
+      '<div><strong>Status:</strong> '+(d.status||'?')+'</div>'+
+      '<div><strong>Time:</strong> '+(d.latency_ms||'?')+'ms</div>'+
+      (d.headers?'<div><strong>Content-Type:</strong> '+(d.headers['content-type']||'?')+'</div>':'')+
+      (d.error?'<div><strong>Error:</strong> '+escapeHtml(d.error)+'</div>':'')+
       '</div>';
     resultDiv.innerHTML=html;
   }catch(e){resultDiv.innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
@@ -2465,29 +2477,29 @@ async function testNetwork(encTarget){
 async function runBenchmark(){
   const btn=event&&event.target?event.target:document.querySelector('#benchmarkBtn');
   if(btn){btn.disabled=true;btn.textContent='Running...';}
-  document.getElementById('benchResult').innerHTML='<div class="muted">Running benchmark...</div>';
+  document.getElementById('benchContent').innerHTML='<div class="muted">Running benchmark...</div>';
   try{
     const r=await fetch('/kimi-admin/benchmark',{method:'POST'});
     const d=await r.json();
-    if(!d.success){showToast(d.error||'Failed',true);document.getElementById('benchResult').innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Benchmark failed')+'</div>';return;}
-    const res=d.data||d.result||{};
-    const html='<table class="bench-table"><tr><th>Test</th><th>Result</th></tr>'+
-      Object.entries(res).map(([k,v])=>'<tr><td>'+escapeHtml(k)+'</td><td>'+(typeof v==='object'?escapeHtml(JSON.stringify(v)):escapeHtml(String(v)))+'</td></tr>').join('')+
+    if(!d.success){showToast(d.error||'Failed',true);document.getElementById('benchContent').innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Benchmark failed')+'</div>';return;}
+    const results=d.results||[];
+    const html='<table class="bench-table"><tr><th>Provider</th><th>Type</th><th>Base URL</th><th>Latency</th><th>Status</th></tr>'+
+      results.map(function(r){return '<tr><td>'+escapeHtml(r.id||'?')+'</td><td>'+escapeHtml(r.type||'')+'</td><td>'+escapeHtml(r.base_url||'')+'</td><td>'+(r.latency_ms?r.latency_ms+'ms':'?')+'</td><td>'+(r.status==='ok'?'✅ '+r.models_found+' models':'❌ '+(r.error||'Failed'))+'</td></tr>';}).join('')+
       '</table>';
-    document.getElementById('benchResult').innerHTML=html;
-  }catch(e){document.getElementById('benchResult').innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
+    document.getElementById('benchContent').innerHTML=html;
+  }catch(e){document.getElementById('benchContent').innerHTML='<div class="net-result error">'+escapeHtml(e.message)+'</div>'}
   finally{if(btn){btn.disabled=false;btn.textContent='Run Benchmark'}}
 }
 
 async function loadFiles(path){
   const p=path||'';
-  const container=document.getElementById('fileBrowser');
+  const container=document.getElementById('fileList');
   container.innerHTML='<div class="muted">Loading...</div>';
   try{
     const r=await fetch('/kimi-admin/files?path='+encodeURIComponent(p));
     const d=await r.json();
     if(!d.success){container.innerHTML='<div class="net-result error">'+escapeHtml(d.error||'Failed')+'</div>';return;}
-    const entries=d.data||d.entries||d.files||[];
+    const entries=d.files||[];
     let html='<div class="file-current"><strong>📁 </strong><a href="#" onclick="loadFiles(\'\');return false">/</a>';
     if(p){
       const parts=p.split('/').filter(Boolean);
@@ -2500,8 +2512,8 @@ async function loadFiles(path){
     html+='</div><div class="file-list">';
     entries.forEach(e=>{
       const name=e.name||e;
-      const isDir=e.isDirectory||e.type==='directory'||(typeof e==='object'&&!e.type);
-      const size=e.size||e.fileSize||0;
+      const isDir=e.type==='dir'||e.isDirectory;
+      const size=e.size_human||(e.size?formatSize(e.size):'');
       if(isDir){
         html+='<div class="file-item dir" onclick="loadFiles(\''+escapeHtml(p+(p?'/':'')+name)+'\')">📁 '+escapeHtml(name)+'</div>';
       }else{
@@ -2519,9 +2531,31 @@ async function loadDaemonStatus(){
     const r=await fetch('/kimi-admin/daemon');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const info=d.data||d.status||{};
-    const html=Object.entries(info).map(([k,v])=>'<div class="stat-box"><strong>'+escapeHtml(k)+'</strong><span>'+escapeHtml(String(v))+'</span></div>').join('');
-    document.getElementById('daemonContent').innerHTML='<div class="grid-2">'+html+'</div>';
+    const info=d.daemon||{};
+
+    // Build a clean summary from daemon object
+    function extractVal(label, obj, key){return '<div class="stat-box"><strong>'+label+'</strong><span>'+escapeHtml(String(obj[key]!==undefined?obj[key]:'N/A'))+'</span></div>';}
+    var items='';
+    items+=extractVal('Alive',info,'alive');
+    items+=extractVal('Process Alive',info,'process_alive');
+    items+=extractVal('PID',info,'pid');
+    items+=extractVal('Daemon Port',info,'port');
+    items+=extractVal('Server Port',info,'server_port');
+    items+=extractVal('Uptime',info,'uptime_human');
+    items+=extractVal('Restarts',info,'restart_count');
+    if(info.memory){
+      items+=extractVal('RSS',info.memory,'rss_human');
+      items+=extractVal('Heap Used',info.memory,'heap_used_pct');
+    }
+    if(info.tunnel){
+      items+=extractVal('Tunnel',info.tunnel,'url');
+      items+=extractVal('Tunnel Alive',info.tunnel,'alive');
+    }
+    if(info.backup){
+      items+=extractVal('Backup Status',info.backup,'last_status');
+      items+=extractVal('Backup Time',info.backup,'last_time');
+    }
+    document.getElementById('daemonContent').innerHTML='<div class="grid-2">'+items+'</div>';
   }catch(e){showToast(e.message,true)}
 }
 
@@ -2545,7 +2579,7 @@ async function loadBackupHistory(){
     const r=await fetch('/kimi-admin/backup/history');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const list=d.data||d.history||d.backups||[];
+    const list=d.backups||[];
     const html=list.map(b=>{
       const name=b.name||b.filename||b.file||'?';
       const date=b.date||b.createdAt||b.timestamp||'';
@@ -2558,7 +2592,7 @@ async function loadBackupHistory(){
         '<button class="btn btn-sm" onclick="uploadToPentaract(\''+encodeURIComponent(name)+'\')">☁ Upload to Pentaract</button>'+
         '</div></div>';
     }).join('');
-    document.getElementById('backupList').innerHTML=html||'<div class="muted">No backups</div>';
+    document.getElementById('backupContent').innerHTML=html||'<div class="muted">No backups</div>';
   }catch(e){showToast(e.message,true)}
 }
 
