@@ -2103,19 +2103,19 @@ const server = http.createServer((req, res) => {
 <style>
 /* ====== Kimi Code Admin Panel — Matching Kimi Code Design System ====== */
 :root {
-  --kc-bg: #0d1117;
-  --kc-surface: #161b22;
-  --kc-surface-raised: #1c2333;
-  --kc-border: #2d333b;
-  --kc-text: #e6edf3;
-  --kc-text-secondary: #8b949e;
-  --kc-text-faint: #6b7280;
+  --kc-bg: #f8f9fa;
+  --kc-surface: #ffffff;
+  --kc-surface-raised: #f0f2f5;
+  --kc-border: #e1e4e8;
+  --kc-text: #1f2937;
+  --kc-text-secondary: #6b7280;
+  --kc-text-faint: #9ca3af;
   --kc-accent: #6c5ce7;
-  --kc-accent-hover: #7c6cf7;
-  --kc-danger: #f85149;
-  --kc-danger-hover: #da3633;
-  --kc-success: #2ecc71;
-  --kc-warning: #f1c40f;
+  --kc-accent-hover: #5a4bd1;
+  --kc-danger: #dc2626;
+  --kc-danger-hover: #b91c1c;
+  --kc-success: #16a34a;
+  --kc-warning: #d97706;
   --kc-radius: 10px;
   --kc-radius-sm: 6px;
   --kc-transition: 0.2s ease;
@@ -2124,14 +2124,14 @@ const server = http.createServer((req, res) => {
 }
 
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--kc-font);background:var(--kc-bg);color:var(--kc-text);min-height:100vh}
+body{font-family:var(--kc-font);background:var(--kc-bg);color:var(--kc-text);min-height:100vh;line-height:1.5}
 
 /* Top navigation bar — matches Kimi Code header */
 .kc-admin-header{
   display:flex;align-items:center;gap:12px;
   height:52px;padding:0 20px;
   background:var(--kc-surface);border-bottom:1px solid var(--kc-border);
-  position:sticky;top:0;z-index:1000;
+  position:sticky;top:0;z-index:1000;box-shadow:0 1px 3px rgba(0,0,0,0.06);
 }
 .kc-admin-header .logo{font-size:15px;font-weight:600;color:var(--kc-text);white-space:nowrap}
 .kc-admin-header .logo span{color:var(--kc-accent)}
@@ -2181,7 +2181,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 .form-group label{display:block;font-size:12px;color:var(--kc-text-secondary);margin-bottom:5px;font-weight:500}
 .form-group input{
   width:100%;padding:9px 12px;
-  background:var(--kc-bg);border:1px solid var(--kc-border);
+  background:#f8f9fa;border:1px solid var(--kc-border);
   border-radius:var(--kc-radius-sm);color:var(--kc-text);
   font-size:13px;outline:none;font-family:var(--kc-font);
   transition:border-color var(--kc-transition);
@@ -2207,11 +2207,11 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 .btn-xs{padding:3px 8px;font-size:11px}
 
 /* Modal — match Kimi Code */
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:100000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.4);z-index:100000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal.active{display:flex}
-.modal-content{background:var(--kc-surface);border:1px solid var(--kc-border);border-radius:16px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.modal-content{background:var(--kc-surface);border:1px solid var(--kc-border);border-radius:16px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.15)}
 .modal-content h2{margin-bottom:16px;color:var(--kc-text);font-size:16px;font-weight:600}
-.model-list{max-height:200px;overflow-y:auto;background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:8px;margin-top:8px}
+.model-list{max-height:200px;overflow-y:auto;background:#f0f2f5;border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:8px;margin-top:8px}
 .model-tag{display:inline-block;background:var(--kc-surface-raised);color:var(--kc-text-secondary);padding:3px 8px;border-radius:var(--kc-radius-sm);font-size:11px;margin:2px;border:1px solid var(--kc-border)}
 
 /* Toast — match Kimi Code */
@@ -2220,7 +2220,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
   background:var(--kc-surface);border:1px solid var(--kc-border);
   color:var(--kc-text);padding:12px 18px;border-radius:var(--kc-radius);
   font-size:13px;z-index:200000;opacity:0;transition:opacity 0.3s;
-  box-shadow:0 8px 24px rgba(0,0,0,0.3);
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
 }
 .toast.show{opacity:1}
 
@@ -2232,18 +2232,18 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 
 /* Grid / Stats */
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.stat-box{background:var(--kc-surface-raised);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:12px 14px}
+.stat-box{background:#f0f2f5;border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:12px 14px}
 .stat-box .label{color:var(--kc-text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
 .stat-box .value{color:var(--kc-text);font-size:17px;font-weight:600;margin-top:3px}
 .stat-box .value.green{color:var(--kc-success)}.stat-box .value.yellow{color:var(--kc-warning)}.stat-box .value.red{color:var(--kc-danger)}
 
-.progress-bar{height:6px;background:var(--kc-bg);border-radius:3px;margin-top:6px;overflow:hidden}
+.progress-bar{height:6px;background:#e5e7eb;border-radius:3px;margin-top:6px;overflow:hidden}
 .progress-bar .fill{height:100%;border-radius:3px;transition:width .5s}.fill.green{background:var(--kc-success)}.fill.yellow{background:var(--kc-warning)}.fill.red{background:var(--kc-danger)}
 
 /* List items */
 .session-item,.env-row,.file-item,.backup-item,.bench-row{
   display:flex;justify-content:space-between;align-items:center;
-  padding:8px 12px;background:var(--kc-surface-raised);border:1px solid var(--kc-border);
+  padding:8px 12px;background:#f0f2f5;border:1px solid var(--kc-border);
   border-radius:var(--kc-radius-sm);margin-bottom:4px;font-size:12px;
 }
 .session-item:hover,.env-row:hover,.file-item:hover,.backup-item:hover{border-color:rgba(108,92,231,0.2)}
@@ -2256,7 +2256,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 
 /* Log viewer */
 .log-viewer{
-  background:var(--kc-bg);border:1px solid var(--kc-border);
+  background:#f0f2f5;border:1px solid var(--kc-border);
   border-radius:var(--kc-radius-sm);padding:12px;
   font-family:var(--kc-mono);font-size:11px;
   max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;
@@ -2274,7 +2274,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 /* Toolbar */
 .toolbar{margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .toolbar input,.toolbar select{
-  padding:6px 10px;background:var(--kc-bg);border:1px solid var(--kc-border);
+  padding:6px 10px;background:#f8f9fa;border:1px solid var(--kc-border);
   border-radius:var(--kc-radius-sm);color:var(--kc-text);font-size:12px;
   outline:none;flex:1;min-width:100px;font-family:var(--kc-font);
   transition:border-color var(--kc-transition);
@@ -2284,7 +2284,7 @@ h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
 
 /* Network */
 .net-result{
-  background:var(--kc-bg);border:1px solid var(--kc-border);
+  background:#f0f2f5;border:1px solid var(--kc-border);
   border-radius:var(--kc-radius-sm);padding:12px;margin-top:8px;
   font-family:var(--kc-mono);font-size:11px;color:var(--kc-text-secondary);
   max-height:200px;overflow-y:auto;
@@ -2319,9 +2319,9 @@ textarea{
 
 /* Scrollbar — match Kimi Code */
 ::-webkit-scrollbar{width:6px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--kc-border);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--kc-text-faint)}
+::-webkit-scrollbar-track{background:#f0f2f5}
+::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#9ca3af}
 
 /* Responsive */
 @media (max-width:768px){
@@ -2380,7 +2380,7 @@ textarea{
       <h2>🖥 System Dashboard</h2>
       <span class="arrow open" id="arrow-system">▼</span>
     </div>
-    <div id="section-system" class="section-content">
+    <div id="section-system" class="section-content" style="display:none">
       <div id="sysContent"><div class="empty-state">Loading system info...</div></div>
       <div class="btn-row"><button class="btn" onclick="loadSystemInfo()">🔄 Refresh</button></div>
     </div>
@@ -2397,7 +2397,7 @@ textarea{
         <button class="btn" onclick="loadConfig()">📂 Load</button>
         <button class="btn btn-danger" onclick="saveConfig()">💾 Save</button>
       </div>
-      <textarea id="configEditor" style="width:100%;height:250px;background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);font-family:var(--kc-mono);font-size:12px;padding:10px;resize:vertical;outline:none" spellcheck="false"></textarea>
+      <textarea id="configEditor" style="width:100%;height:250px;background:#f0f2f5;border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);font-family:var(--kc-mono);font-size:12px;padding:10px;resize:vertical;outline:none" spellcheck="false"></textarea>
       <div id="configStatus" style="margin-top:6px;font-size:12px;color:var(--kc-text-secondary)"></div>
     </div>
   </div>
@@ -2410,7 +2410,7 @@ textarea{
     <div id="section-logs" class="section-content" style="display:none">
       <div class="toolbar">
         <input id="logFilter" placeholder="Filter logs..." onkeyup="loadLogs()">
-        <select id="logLines" onchange="loadLogs()" style="background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);padding:4px 8px;font-size:12px">
+        <select id="logLines" onchange="loadLogs()" style="background:#f8f9fa;border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);padding:4px 8px;font-size:12px">
           <option value="50">50 lines</option><option value="100" selected>100 lines</option><option value="200">200 lines</option>
         </select>
         <button class="btn" onclick="loadLogs()">🔄 Refresh</button>
@@ -3105,8 +3105,9 @@ async function loadPgActivity(){
 }
 
 loadProviders();
-// Auto-load PG status on page load
+// Auto-load key sections on page load
 setTimeout(loadPgStatus,500);
+setTimeout(loadSystemInfo,300);
 </script>
 </body>
 </html>`;
