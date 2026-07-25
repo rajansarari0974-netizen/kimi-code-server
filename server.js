@@ -2101,83 +2101,251 @@ const server = http.createServer((req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Kimi Code — Provider Management</title>
 <style>
+/* ====== Kimi Code Admin Panel — Matching Kimi Code Design System ====== */
+:root {
+  --kc-bg: #0d1117;
+  --kc-surface: #161b22;
+  --kc-surface-raised: #1c2333;
+  --kc-border: #2d333b;
+  --kc-text: #e6edf3;
+  --kc-text-secondary: #8b949e;
+  --kc-text-faint: #6b7280;
+  --kc-accent: #6c5ce7;
+  --kc-accent-hover: #7c6cf7;
+  --kc-danger: #f85149;
+  --kc-danger-hover: #da3633;
+  --kc-success: #2ecc71;
+  --kc-warning: #f1c40f;
+  --kc-radius: 10px;
+  --kc-radius-sm: 6px;
+  --kc-transition: 0.2s ease;
+  --kc-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --kc-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+}
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#0f0f0f;color:#e0e0e0;min-height:100vh}
-.container{max-width:900px;margin:0 auto;padding:24px}
-h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
-.sub{color:#888;font-size:14px;margin-bottom:24px}
-.card{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:12px;padding:20px;margin-bottom:16px}
-.card h2{font-size:16px;font-weight:500;margin-bottom:12px;color:#6c5ce7}
-.providers-list{display:grid;gap:8px}
-.provider-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#252540;border-radius:8px;cursor:pointer;transition:background 0.15s}
-.provider-item:hover{background:#2d2d50}
-.provider-name{font-weight:500;color:#fff}
-.provider-meta{color:#888;font-size:12px}
-.provider-models{color:#6c5ce7;font-size:12px;font-weight:500}
-.add-btn{display:inline-flex;align-items:center;gap:6px;background:#6c5ce7;color:#fff;border:none;border-radius:8px;padding:10px 18px;font-size:14px;font-weight:500;cursor:pointer;transition:background 0.15s;margin-top:8px}
-.add-btn:hover{background:#5a4bd1}
+body{font-family:var(--kc-font);background:var(--kc-bg);color:var(--kc-text);min-height:100vh}
+
+/* Top navigation bar — matches Kimi Code header */
+.kc-admin-header{
+  display:flex;align-items:center;gap:12px;
+  height:52px;padding:0 20px;
+  background:var(--kc-surface);border-bottom:1px solid var(--kc-border);
+  position:sticky;top:0;z-index:1000;
+}
+.kc-admin-header .logo{font-size:15px;font-weight:600;color:var(--kc-text);white-space:nowrap}
+.kc-admin-header .logo span{color:var(--kc-accent)}
+.kc-admin-header nav{display:flex;gap:4px;margin-left:16px;overflow-x:auto}
+.kc-admin-header nav a{
+  padding:6px 12px;border-radius:var(--kc-radius-sm);
+  font-size:12px;font-weight:500;color:var(--kc-text-secondary);
+  text-decoration:none;white-space:nowrap;transition:all var(--kc-transition);cursor:pointer;
+}
+.kc-admin-header nav a:hover,.kc-admin-header nav a.active{background:rgba(108,92,231,0.1);color:var(--kc-accent)}
+.kc-admin-header .back-link{
+  margin-left:auto;display:flex;align-items:center;gap:6px;
+  padding:6px 14px;border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);
+  background:transparent;color:var(--kc-text-secondary);font-size:12px;font-weight:500;
+  text-decoration:none;transition:all var(--kc-transition);font-family:var(--kc-font);cursor:pointer;
+}
+.kc-admin-header .back-link:hover{border-color:var(--kc-accent);background:rgba(108,92,231,0.08);color:var(--kc-accent)}
+
+.container{max-width:920px;margin:0 auto;padding:24px 20px 60px}
+h1{font-size:20px;font-weight:600;margin-bottom:4px;color:var(--kc-text)}
+.sub{color:var(--kc-text-secondary);font-size:13px;margin-bottom:20px}
+
+/* Cards — match Kimi Code surface */
+.card{background:var(--kc-surface);border:1px solid var(--kc-border);border-radius:var(--kc-radius);padding:18px 20px;margin-bottom:14px;transition:border-color var(--kc-transition)}
+.card:hover{border-color:rgba(108,92,231,0.2)}
+.card h2{font-size:15px;font-weight:600;margin-bottom:12px;color:var(--kc-text)}
+.card h2::before{content:'';display:inline-block;width:3px;height:14px;background:var(--kc-accent);border-radius:2px;margin-right:8px;vertical-align:middle}
+.providers-list{display:grid;gap:6px}
+.provider-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 14px;background:var(--kc-surface-raised);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);cursor:pointer;transition:all var(--kc-transition);
+}
+.provider-item:hover{border-color:rgba(108,92,231,0.3);background:rgba(108,92,231,0.06)}
+.provider-name{font-weight:500;color:var(--kc-text);font-size:13px}
+.provider-meta{color:var(--kc-text-secondary);font-size:12px}
+.provider-models{color:var(--kc-accent);font-size:12px;font-weight:600}
+.add-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  background:var(--kc-accent);color:#fff;border:none;border-radius:var(--kc-radius-sm);
+  padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;
+  transition:all var(--kc-transition);margin-top:8px;font-family:var(--kc-font);
+}
+.add-btn:hover{background:var(--kc-accent-hover);transform:translateY(-1px)}
+
 .form-group{margin-bottom:14px}
-.form-group label{display:block;font-size:13px;color:#aaa;margin-bottom:4px;font-weight:500}
-.form-group input{width:100%;padding:10px 12px;background#1e1e38;border:1px solid #333;border-radius:8px;color:#fff;font-size:14px;outline:none}
-.form-group input:focus{border-color:#6c5ce7}
+.form-group label{display:block;font-size:12px;color:var(--kc-text-secondary);margin-bottom:5px;font-weight:500}
+.form-group input{
+  width:100%;padding:9px 12px;
+  background:var(--kc-bg);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);color:var(--kc-text);
+  font-size:13px;outline:none;font-family:var(--kc-font);
+  transition:border-color var(--kc-transition);
+}
+.form-group input:focus{border-color:var(--kc-accent);box-shadow:0 0 0 2px rgba(108,92,231,0.12)}
+.form-group input::placeholder{color:var(--kc-text-faint)}
 .btn-row{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap}
-.btn{background:#6c5ce7;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;transition:all 0.15s}
-.btn:hover{background:#5a4bd1}
-.btn-danger{background:#e74c3c}
-.btn-danger:hover{background:#c0392b}
-.btn-secondary{background:#333}
-.btn-secondary:hover{background:#444}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:100000;align-items:center;justify-content:center}
+
+/* Buttons — match Kimi Code */
+.btn{
+  background:var(--kc-accent);color:#fff;border:none;
+  border-radius:var(--kc-radius-sm);padding:8px 15px;
+  font-size:12px;font-weight:600;cursor:pointer;
+  transition:all var(--kc-transition);font-family:var(--kc-font);
+}
+.btn:hover{background:var(--kc-accent-hover);transform:translateY(-1px)}
+.btn:active{transform:scale(0.98)}
+.btn-danger{background:var(--kc-danger)}
+.btn-danger:hover{background:var(--kc-danger-hover)}
+.btn-secondary{background:var(--kc-surface-raised);border:1px solid var(--kc-border);color:var(--kc-text-secondary)}
+.btn-secondary:hover{background:var(--kc-surface);border-color:var(--kc-text-faint);color:var(--kc-text)}
+.btn-sm{padding:5px 10px;font-size:11px}
+.btn-xs{padding:3px 8px;font-size:11px}
+
+/* Modal — match Kimi Code */
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:100000;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
 .modal.active{display:flex}
-.modal-content{background:#1a1a2e;border:1px solid #2a2a3e;border-radius:16px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow-y:auto}
-.modal-content h2{margin-bottom:16px;color:#fff;font-size:18px}
-.model-list{max-height:200px;overflow-y:auto;background:#1e1e30;border-radius:8px;padding:8px;margin-top:8px}
-.model-tag{display:inline-block;background:#252540;color:#ccc;padding:3px 8px;border-radius:4px;font-size:11px;margin:2px}
-.toast{position:fixed;bottom:80px;right:20px;background:#1a1a2e;border:1px solid #333;color:#e0e0e0;padding:12px 20px;border-radius:10px;font-size:13px;z-index:200000;opacity:0;transition:opacity 0.3s}
+.modal-content{background:var(--kc-surface);border:1px solid var(--kc-border);border-radius:16px;padding:24px;width:90%;max-width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.4)}
+.modal-content h2{margin-bottom:16px;color:var(--kc-text);font-size:16px;font-weight:600}
+.model-list{max-height:200px;overflow-y:auto;background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:8px;margin-top:8px}
+.model-tag{display:inline-block;background:var(--kc-surface-raised);color:var(--kc-text-secondary);padding:3px 8px;border-radius:var(--kc-radius-sm);font-size:11px;margin:2px;border:1px solid var(--kc-border)}
+
+/* Toast — match Kimi Code */
+.toast{
+  position:fixed;bottom:80px;right:20px;
+  background:var(--kc-surface);border:1px solid var(--kc-border);
+  color:var(--kc-text);padding:12px 18px;border-radius:var(--kc-radius);
+  font-size:13px;z-index:200000;opacity:0;transition:opacity 0.3s;
+  box-shadow:0 8px 24px rgba(0,0,0,0.3);
+}
 .toast.show{opacity:1}
+
 .hidden{display:none}
-.spinner{display:inline-block;width:16px;height:16px;border:2px solid #333;border-radius:50%;border-top-color:#6c5ce7;animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--kc-border);border-radius:50%;border-top-color:var(--kc-accent);animation:spin .6s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.empty-state{text-align:center;padding:30px;color:#666;font-size:14px}
-/* Admin Panel Extended Styles */
-.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.stat-box{background:#252540;border-radius:8px;padding:12px;margin-bottom:8px}
-.stat-box .label{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:.5px}
-.stat-box .value{color:#fff;font-size:18px;font-weight:600;margin-top:2px}
-.stat-box .value.green{color:#2ecc71}.stat-box .value.yellow{color:#f1c40f}.stat-box .value.red{color:#e74c3c}
-.progress-bar{height:6px;background:#1e1e30;border-radius:3px;margin-top:6px;overflow:hidden}
-.progress-bar .fill{height:100%;border-radius:3px;transition:width .5s}.fill.green{background:#2ecc71}.fill.yellow{background:#f1c40f}.fill.red{background:#e74c3c}
-.session-item,.env-row,.file-item,.backup-item,.bench-row{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#252540;border-radius:6px;margin-bottom:4px;font-size:13px}
-.session-item .sid,.env-row .ekey,.file-item .fname{color:#6c5ce7;font-weight:500;font-size:12px}
-.file-item .fmeta{color:#888;font-size:11px}.file-item .fsize{color:#aaa;font-size:11px}
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500}
-.badge.ok{background:#1a3a1a;color:#2ecc71}.badge.err{background:#3a1a1a;color:#e74c3c}.badge.warn{background:#3a3a1a;color:#f1c40f}
-.log-viewer{background:#0a0a0a;border:1px solid #333;border-radius:8px;padding:12px;font-family:monospace;font-size:12px;max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;color:#aaa;line-height:1.6}
-.log-viewer .ts{color:#6c5ce7}.log-viewer .ok{color:#2ecc71}.log-viewer .err{color:#e74c3c}.log-viewer .warn{color:#f1c40f}
-.card-header{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center}
-.card-header:hover{opacity:.8}
-.card-header .arrow{font-size:12px;color:#888;transition:transform .2s}
+
+.empty-state{text-align:center;padding:28px;color:var(--kc-text-faint);font-size:13px}
+
+/* Grid / Stats */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat-box{background:var(--kc-surface-raised);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);padding:12px 14px}
+.stat-box .label{color:var(--kc-text-faint);font-size:10px;text-transform:uppercase;letter-spacing:.6px;font-weight:600}
+.stat-box .value{color:var(--kc-text);font-size:17px;font-weight:600;margin-top:3px}
+.stat-box .value.green{color:var(--kc-success)}.stat-box .value.yellow{color:var(--kc-warning)}.stat-box .value.red{color:var(--kc-danger)}
+
+.progress-bar{height:6px;background:var(--kc-bg);border-radius:3px;margin-top:6px;overflow:hidden}
+.progress-bar .fill{height:100%;border-radius:3px;transition:width .5s}.fill.green{background:var(--kc-success)}.fill.yellow{background:var(--kc-warning)}.fill.red{background:var(--kc-danger)}
+
+/* List items */
+.session-item,.env-row,.file-item,.backup-item,.bench-row{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 12px;background:var(--kc-surface-raised);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);margin-bottom:4px;font-size:12px;
+}
+.session-item:hover,.env-row:hover,.file-item:hover,.backup-item:hover{border-color:rgba(108,92,231,0.2)}
+.session-item .sid,.env-row .ekey,.file-item .fname{color:var(--kc-accent);font-weight:600;font-size:12px}
+.file-item .fmeta{color:var(--kc-text-secondary);font-size:11px}.file-item .fsize{color:var(--kc-text-faint);font-size:11px}
+.file-item.dir{cursor:pointer;color:var(--kc-text)}.file-item.dir:hover{color:var(--kc-accent)}
+
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
+.badge.ok{background:rgba(46,204,113,0.12);color:var(--kc-success)}.badge.err{background:rgba(248,81,73,0.12);color:var(--kc-danger)}.badge.warn{background:rgba(241,196,15,0.12);color:var(--kc-warning)}
+
+/* Log viewer */
+.log-viewer{
+  background:var(--kc-bg);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);padding:12px;
+  font-family:var(--kc-mono);font-size:11px;
+  max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;
+  color:var(--kc-text-secondary);line-height:1.6;
+}
+.log-viewer .ts{color:var(--kc-accent)}.log-viewer .ok{color:var(--kc-success)}.log-viewer .err{color:var(--kc-danger)}.log-viewer .warn{color:var(--kc-warning)}
+
+/* Card headers (collapsible) */
+.card-header{cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;padding:2px 0}
+.card-header:hover{opacity:.85}
+.card-header .arrow{font-size:11px;color:var(--kc-text-faint);transition:transform 0.2s ease}
 .card-header .arrow.open{transform:rotate(180deg)}
 .section-content{padding-top:12px}
+
+/* Toolbar */
 .toolbar{margin-bottom:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-.toolbar input{padding:6px 10px;background:#1e1e38;border:1px solid #333;border-radius:6px;color:#fff;font-size:12px;outline:none;flex:1;min-width:100px}
-.toolbar input:focus{border-color:#6c5ce7}
-.net-result{background:#1e1e30;border-radius:8px;padding:12px;margin-top:8px;font-family:monospace;font-size:12px;color:#ccc;max-height:200px;overflow-y:auto}
-.folder-icon{color:#f1c40f;margin-right:4px}.file-icon{color:#888;margin-right:4px}
-.breadcrumb{color:#6c5ce7;font-size:13px;margin-bottom:8px;word-break:break-all}
-.breadcrumb a{color:#6c5ce7;text-decoration:none;cursor:pointer}.breadcrumb a:hover{text-decoration:underline}
+.toolbar input,.toolbar select{
+  padding:6px 10px;background:var(--kc-bg);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);color:var(--kc-text);font-size:12px;
+  outline:none;flex:1;min-width:100px;font-family:var(--kc-font);
+  transition:border-color var(--kc-transition);
+}
+.toolbar input:focus{border-color:var(--kc-accent);box-shadow:0 0 0 2px rgba(108,92,231,0.08)}
+.toolbar select{flex:none;min-width:auto}
+
+/* Network */
+.net-result{
+  background:var(--kc-bg);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);padding:12px;margin-top:8px;
+  font-family:var(--kc-mono);font-size:11px;color:var(--kc-text-secondary);
+  max-height:200px;overflow-y:auto;
+}
+.net-result.success{border-left:3px solid var(--kc-success)}
+.net-result.error{border-left:3px solid var(--kc-danger)}
+.folder-icon{color:var(--kc-warning);margin-right:4px}.file-icon{color:var(--kc-text-secondary);margin-right:4px}
+.breadcrumb{color:var(--kc-accent);font-size:12px;margin-bottom:8px;word-break:break-all}
+.breadcrumb a{color:var(--kc-accent);text-decoration:none;cursor:pointer}.breadcrumb a:hover{text-decoration:underline}
 .file-browser{max-height:350px;overflow-y:auto}
 .env-table{max-height:300px;overflow-y:auto}
 .backup-list{max-height:250px;overflow-y:auto}
 .net-btns{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px}
-.net-btns button{padding:4px 10px;background:#252540;border:1px solid #333;border-radius:6px;color:#ccc;font-size:11px;cursor:pointer}
-.net-btns button:hover{background:#333;color:#fff}
+.net-btns button{
+  padding:4px 10px;background:var(--kc-surface-raised);border:1px solid var(--kc-border);
+  border-radius:var(--kc-radius-sm);color:var(--kc-text-secondary);font-size:11px;
+  cursor:pointer;transition:all var(--kc-transition);font-family:var(--kc-font);
+}
+.net-btns button:hover{background:var(--kc-surface);border-color:var(--kc-accent);color:var(--kc-text)}
+
+/* Table styles for benchmark / pg */
+.bench-table{width:100%;border-collapse:collapse;font-size:12px}
+.bench-table th{padding:8px 10px;text-align:left;color:var(--kc-accent);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid var(--kc-border)}
+.bench-table td{padding:8px 10px;color:var(--kc-text-secondary);border-bottom:1px solid var(--kc-border)}
+.bench-table tr:hover td{background:rgba(108,92,231,0.04)}
+
+/* Textarea */
+textarea{
+  font-family:var(--kc-mono);font-size:12px;line-height:1.5;
+  resize:vertical;outline:none;
+}
+
+/* Scrollbar — match Kimi Code */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--kc-border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--kc-text-faint)}
+
+/* Responsive */
+@media (max-width:768px){
+  .container{padding:16px 12px 40px}
+  .grid-2{grid-template-columns:1fr}
+  .kc-admin-header nav{display:none}
+  .btn-row{gap:6px}
+}
 </style>
 </head>
 <body>
+<div class="kc-admin-header">
+  <div class="logo">Kimi <span>Code</span> Admin</div>
+  <nav>
+    <a class="active" onclick="document.querySelector('.container').scrollIntoView({behavior:'smooth'})">Overview</a>
+    <a onclick="document.getElementById('section-system').style.display='block';document.getElementById('section-system').scrollIntoView({behavior:'smooth'})">System</a>
+    <a onclick="document.getElementById('section-logs').style.display='block';document.getElementById('section-logs').scrollIntoView({behavior:'smooth'})">Logs</a>
+    <a onclick="document.getElementById('section-pgsync').style.display='block';document.getElementById('section-pgsync').scrollIntoView({behavior:'smooth'})">Database</a>
+  </nav>
+  <a href="/" class="back-link">&larr; Back to Chat</a>
+</div>
 <div class="container">
-  <h1>🔧 Provider Management</h1>
-  <div class="sub">Manage AI model providers for Kimi Code</div>
+  <h1>Provider Management</h1>
+  <div class="sub">Configure and manage AI model providers for Kimi Code</div>
   <div class="card">
     <h2>Installed Providers</h2>
     <div id="providerList" class="providers-list"><div class="empty-state">Loading...</div></div>
@@ -2202,7 +2370,7 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
       <button class="btn" onclick="restoreFrom('pentaract')">📥 Restore from Pentaract</button>
       <button class="btn" onclick="location.href='/'">← Back to Chat</button>
     </div>
-    <div id="actionStatus" style="margin-top:8px;font-size:12px;color:#888"></div>
+    <div id="actionStatus" style="margin-top:8px;font-size:12px;color:var(--kc-text-secondary)"></div>
   </div>
 
   <!-- ====== NEW ADMIN FEATURES ====== -->
@@ -2225,12 +2393,12 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
     </div>
     <div id="section-config" class="section-content" style="display:none">
       <div class="toolbar">
-        <span style="color:#888;font-size:11px" id="configMeta"></span>
+        <span style="color:var(--kc-text-secondary);font-size:11px" id="configMeta"></span>
         <button class="btn" onclick="loadConfig()">📂 Load</button>
         <button class="btn btn-danger" onclick="saveConfig()">💾 Save</button>
       </div>
-      <textarea id="configEditor" style="width:100%;height:250px;background:#0a0a0a;border:1px solid #333;border-radius:8px;color:#e0e0e0;font-family:monospace;font-size:12px;padding:10px;resize:vertical;outline:none" spellcheck="false"></textarea>
-      <div id="configStatus" style="margin-top:6px;font-size:12px;color:#888"></div>
+      <textarea id="configEditor" style="width:100%;height:250px;background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);font-family:var(--kc-mono);font-size:12px;padding:10px;resize:vertical;outline:none" spellcheck="false"></textarea>
+      <div id="configStatus" style="margin-top:6px;font-size:12px;color:var(--kc-text-secondary)"></div>
     </div>
   </div>
 
@@ -2242,14 +2410,14 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
     <div id="section-logs" class="section-content" style="display:none">
       <div class="toolbar">
         <input id="logFilter" placeholder="Filter logs..." onkeyup="loadLogs()">
-        <select id="logLines" onchange="loadLogs()" style="background:#1e1e38;border:1px solid #333;border-radius:6px;color:#fff;padding:4px 8px;font-size:12px">
+        <select id="logLines" onchange="loadLogs()" style="background:var(--kc-bg);border:1px solid var(--kc-border);border-radius:var(--kc-radius-sm);color:var(--kc-text);padding:4px 8px;font-size:12px">
           <option value="50">50 lines</option><option value="100" selected>100 lines</option><option value="200">200 lines</option>
         </select>
         <button class="btn" onclick="loadLogs()">🔄 Refresh</button>
         <button class="btn btn-secondary" onclick="clearLogs()">🗑 Clear</button>
       </div>
       <div id="logViewer" class="log-viewer">Loading...</div>
-      <div style="margin-top:4px;font-size:11px;color:#666" id="logMeta"></div>
+      <div style="margin-top:4px;font-size:11px;color:var(--kc-text-faint)" id="logMeta"></div>
     </div>
   </div>
 
@@ -2352,27 +2520,29 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
         <button class="btn" onclick="uploadToPentaract()">☁ Upload to Pentaract</button>
       </div>
     </div>
+  </div>
 
-    <!-- PostgreSQL Sync Dashboard -->
+  <!-- PostgreSQL Sync Dashboard -->
+  <div class="card">
     <div class="card-header" onclick="toggleSection('pgsync')">
-      <h2>🐘 PostgreSQL Sync (Pentaract + Kimi)</h2>
+      <h2>PostgreSQL Sync (Pentaract + Kimi)</h2>
       <span class="arrow" id="arrow-pgsync">▶</span>
     </div>
     <div id="section-pgsync" class="section-content" style="display:none">
       <div class="grid-2" id="pgStatusBox">
-        <div class="stat-box"><div class="label">Connection</div><div class="value" id="pgConnStatus">⏳ Loading...</div></div>
-        <div class="stat-box"><div class="label">Database</div><div class="value" id="pgDbName">—</div></div>
-        <div class="stat-box"><div class="label">PG Version</div><div class="value" id="pgVersion">—</div></div>
-        <div class="stat-box"><div class="label">Active Connections</div><div class="value" id="pgConns">—</div></div>
-        <div class="stat-box"><div class="label">Total Syncs</div><div class="value" id="pgSyncs">—</div></div>
-        <div class="stat-box"><div class="label">Last Sync</div><div class="value" id="pgLastSync">—</div></div>
-        <div class="stat-box"><div class="label">Errors</div><div class="value" id="pgErrors">—</div></div>
-        <div class="stat-box"><div class="label">Pool (total/idle/wait)</div><div class="value" id="pgPool">—</div></div>
+        <div class="stat-box"><div class="label">Connection</div><div class="value" id="pgConnStatus">Loading...</div></div>
+        <div class="stat-box"><div class="label">Database</div><div class="value" id="pgDbName">--</div></div>
+        <div class="stat-box"><div class="label">PG Version</div><div class="value" id="pgVersion">--</div></div>
+        <div class="stat-box"><div class="label">Active Connections</div><div class="value" id="pgConns">--</div></div>
+        <div class="stat-box"><div class="label">Total Syncs</div><div class="value" id="pgSyncs">--</div></div>
+        <div class="stat-box"><div class="label">Last Sync</div><div class="value" id="pgLastSync">--</div></div>
+        <div class="stat-box"><div class="label">Errors</div><div class="value" id="pgErrors">--</div></div>
+        <div class="stat-box"><div class="label">Pool (total/idle/wait)</div><div class="value" id="pgPool">--</div></div>
       </div>
       <div class="btn-row" style="margin:12px 0">
-        <button class="btn" onclick="loadPgStatus()">🔄 Refresh Status</button>
-        <button class="btn" onclick="forcePgSync()">🔃 Force Sync Now</button>
-        <button class="btn" onclick="loadPgTables()">📋 List Tables</button>
+        <button class="btn" onclick="loadPgStatus()">Refresh Status</button>
+        <button class="btn" onclick="forcePgSync()">Force Sync Now</button>
+        <button class="btn" onclick="loadPgTables()">List Tables</button>
       </div>
       <div id="pgTablesContent"><div class="empty-state">Click "List Tables" to see shared database tables</div></div>
       <div id="pgTableDataContent" style="margin-top:12px"></div>
@@ -2399,7 +2569,7 @@ function pLog(m){console.log('[KimiAdmin]',m)}
 
 function showToast(msg,isErr){
   const t=$('toast');t.textContent=msg;t.className='toast show';
-  if(isErr) t.style.borderColor='#e74c3c'; else t.style.borderColor='#333';
+  if(isErr) t.style.borderColor='var(--kc-danger)'; else t.style.borderColor='var(--kc-border)';
   setTimeout(()=>{t.className='toast'},3000);
 }
 
@@ -2437,7 +2607,7 @@ async function showProviderDetail(id){
     $('modalTitle').textContent='Models — '+id;
     $('modalModels').innerHTML=d.models&&d.models.length>0
       ? d.models.map(m=>\`<span class="model-tag">\${m}</span>\`).join('')
-      : '<div style="color:#666;font-size:13px">No models found. Click Rediscover.</div>';
+      : '<div style="color:var(--kc-text-faint);font-size:13px">No models found. Click Rediscover.</div>';
     $('modelsModal').className='modal active';
     $('modalModels').innerHTML+=(
       '<div class="btn-row" style="margin-top:12px">'+
@@ -2876,11 +3046,11 @@ async function loadPgTables(){
     const d=await r.json();
     if(!d.tables||d.tables.length===0){$('pgTablesContent').innerHTML='<div class="empty-state">No tables found</div>';return;}
     let h='<table style="width:100%;border-collapse:collapse;margin-top:8px">';
-    h+='<tr style="background:#252540"><th style="padding:8px;text-align:left;color:#6c5ce7">Table</th><th style="padding:8px;text-align:right;color:#6c5ce7">Rows</th><th style="padding:8px;text-align:center;color:#6c5ce7">Action</th></tr>';
+    h+='<tr style="background:var(--kc-surface-raised)"><th style="padding:8px;text-align:left;color:var(--kc-accent)">Table</th><th style="padding:8px;text-align:right;color:var(--kc-accent)">Rows</th><th style="padding:8px;text-align:center;color:var(--kc-accent)">Action</th></tr>';
     d.tables.forEach(t=>{
       const cnt=t.row_count!==null?t.row_count:'?';
-      h+='<tr style="border-bottom:1px solid #2a2a3e"><td style="padding:8px;color:#fff">'+escapeHtml(t.table_name)+'</td>';
-      h+='<td style="padding:8px;text-align:right;color:#888">'+cnt+'</td>';
+      h+='<tr style="border-bottom:1px solid var(--kc-border)"><td style="padding:8px;color:var(--kc-text)">'+escapeHtml(t.table_name)+'</td>';
+      h+='<td style="padding:8px;text-align:right;color:var(--kc-text-secondary)">'+cnt+'</td>';
       h+='<td style="padding:8px;text-align:center"><button class="btn" style="padding:4px 10px;font-size:11px" onclick="viewPgTable(\''+encodeURIComponent(t.table_name)+'\')">View</button></td></tr>';
     });
     h+='</table>';
@@ -2898,15 +3068,15 @@ async function viewPgTable(encName){
     const cols=Object.keys(d.rows[0]);
     let h='<div class="card" style="margin-top:8px"><h2>📋 '+escapeHtml(name)+' ('+d.rows.length+' rows)</h2>';
     h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
-    h+='<tr style="background:#252540">'+cols.map(c=>'<th style="padding:6px 8px;text-align:left;color:#6c5ce7;white-space:nowrap">'+escapeHtml(c)+'</th>').join('')+'</tr>';
+    h+='<tr style="background:var(--kc-surface-raised)">'+cols.map(c=>'<th style="padding:6px 8px;text-align:left;color:var(--kc-accent);white-space:nowrap">'+escapeHtml(c)+'</th>').join('')+'</tr>';
     d.rows.slice(0,20).forEach(row=>{
-      h+='<tr style="border-bottom:1px solid #2a2a3e">'+cols.map(c=>{
+      h+='<tr style="border-bottom:1px solid var(--kc-border)">'+cols.map(c=>{
         let v=row[c];
         if(v===null||v===undefined) v='';
         else if(typeof v==='object') v=JSON.stringify(v);
         else v=String(v);
         if(v.length>80) v=v.substring(0,80)+'...';
-        return '<td style="padding:6px 8px;color:#ccc;white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(v)+'</td>';
+        return '<td style="padding:6px 8px;color:var(--kc-text-secondary);white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(v)+'</td>';
       }).join('')+'</tr>';
     });
     h+='</table></div></div>';
@@ -2922,11 +3092,11 @@ async function loadPgActivity(){
     d.activities.forEach(a=>{
       const time=new Date(a.created_at).toLocaleString();
       const data=typeof a.event_data==='object'?JSON.stringify(a.event_data):a.event_data;
-      h+='<div style="padding:6px 0;border-bottom:1px solid #2a2a3e;font-size:12px">';
-      h+='<span style="color:#6c5ce7">'+escapeHtml(a.service)+'</span> ';
-      h+='<span style="color:#f1c40f">'+escapeHtml(a.event_type)+'</span> ';
-      h+='<span style="color:#888">'+time+'</span>';
-      if(data&&data!=='{}') h+=' <span style="color:#aaa">'+escapeHtml(data).substring(0,100)+'</span>';
+      h+='<div style="padding:6px 0;border-bottom:1px solid var(--kc-border);font-size:12px">';
+      h+='<span style="color:var(--kc-accent)">'+escapeHtml(a.service)+'</span> ';
+      h+='<span style="color:var(--kc-warning)">'+escapeHtml(a.event_type)+'</span> ';
+      h+='<span style="color:var(--kc-text-secondary)">'+time+'</span>';
+      if(data&&data!=='{}') h+=' <span style="color:var(--kc-text-faint)">'+escapeHtml(data).substring(0,100)+'</span>';
       h+='</div>';
     });
     h+='</div>';
