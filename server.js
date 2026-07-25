@@ -51,6 +51,183 @@ let lastBackupSize = 0;
 let lastBackupStatus = 'never';
 let backupInProgress = false;
 
+// ====== SHARED POSTGRESQL (Aiven — same DB as Pentaract) ======
+// Read Aiven PG password from Pentaract config.dat (base64 encoded) or env
+function readAivenPassword() {
+  // Try env var first
+  if (process.env.AIVEN_PG_PASSWORD) return process.env.AIVEN_PG_PASSWORD;
+  // Try reading from Pentaract config.dat
+  try {
+    const configPath = path.join(path.dirname(KIMI_HOME), 'Pentaract', 'config.dat');
+    if (fs.existsSync(configPath)) {
+      const encoded = fs.readFileSync(configPath, 'utf8').trim();
+      const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+      const match = decoded.match(/DATABASE_PASSWORD=(.+)/);
+      if (match) return match[1].trim();
+    }
+  } catch(e) {}
+  // Fallback: read from /opt/render/config.dat
+  try {
+    const encoded = fs.readFileSync('/opt/render/config.dat', 'utf8').trim();
+    const decoded = Buffer.from(encoded, 'base64').toString('utf8');
+    const match = decoded.match(/DATABASE_PASSWORD=(.+)/);
+    if (match) return match[1].trim();
+  } catch(e) {}
+  return '';
+}
+
+const PG_HOST = process.env.PG_HOST || 'pg-752045-stanuserid-9476.a.aivencloud.com';
+const PG_PORT = parseInt(process.env.PG_PORT) || 26183;
+const PG_USER = process.env.PG_USER || 'avnadmin';
+const PG_PASSWORD = readAivenPassword();
+const PG_DATABASE = process.env.PG_DATABASE || 'defaultdb';
+const PG_SERVICE_NAME = process.env.PG_SERVICE_NAME || 'kimi-code'; // identifier for this service
+
+let pgPool = null;
+let pgConnected = false;
+let pgLastSync = null;
+let pgSyncCount = 0;
+let pgErrorCount = 0;
+
+function initPgPool() {
+  try {
+    const { Pool } = require('pg');
+    pgPool = new Pool({
+      host: PG_HOST,
+      port: PG_PORT,
+      user: PG_USER,
+      password: PG_PASSWORD,
+      database: PG_DATABASE,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+    pgPool.on('error', (err) => {
+      log(`⚠️ PG pool error: ${err.message}`);
+      pgConnected = false;
+      pgErrorCount++;
+    });
+    log(`✅ PostgreSQL pool initialized: ${PG_HOST}:${PG_PORT}/${PG_DATABASE}`);
+    return true;
+  } catch (err) {
+    log(`❌ PostgreSQL pool init failed: ${err.message}`);
+    return false;
+  }
+}
+
+async function pgQuery(text, params) {
+  if (!pgPool) return { rows: [], error: 'Pool not initialized' };
+  try {
+    const result = await pgPool.query(text, params);
+    pgConnected = true;
+    return { rows: result.rows, error: null };
+  } catch (err) {
+    pgConnected = false;
+    pgErrorCount++;
+    log(`⚠️ PG query error: ${err.message}`);
+    return { rows: [], error: err.message };
+  }
+}
+
+async function ensureKimiTables() {
+  // Create kimi-specific tables for cross-service data sharing
+  const queries = [
+    `CREATE TABLE IF NOT EXISTS kimi_activity (
+      id SERIAL PRIMARY KEY,
+      service VARCHAR(50) NOT NULL DEFAULT 'kimi-code',
+      event_type VARCHAR(50) NOT NULL,
+      event_data JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS kimi_sessions_sync (
+      id SERIAL PRIMARY KEY,
+      session_id VARCHAR(255) NOT NULL,
+      workspace VARCHAR(255),
+      status VARCHAR(50) DEFAULT 'active',
+      messages_count INT DEFAULT 0,
+      last_activity TIMESTAMPTZ DEFAULT NOW(),
+      metadata JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )`,
+    `CREATE TABLE IF NOT EXISTS kimi_sync_state (
+      id SERIAL PRIMARY KEY,
+      service VARCHAR(50) NOT NULL DEFAULT 'kimi-code',
+      last_sync TIMESTAMPTZ DEFAULT NOW(),
+      sync_data JSONB,
+      status VARCHAR(50) DEFAULT 'ok'
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_kimi_activity_service ON kimi_activity(service)`,
+    `CREATE INDEX IF NOT EXISTS idx_kimi_activity_created ON kimi_activity(created_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_kimi_sessions_status ON kimi_sessions_sync(status)`,
+  ];
+  for (const q of queries) {
+    const r = await pgQuery(q);
+    if (r.error) log(`⚠️ Table init error: ${r.error}`);
+  }
+  log('✅ Kimi PostgreSQL tables ensured');
+}
+
+async function logActivity(eventType, eventData) {
+  await pgQuery(
+    `INSERT INTO kimi_activity (service, event_type, event_data) VALUES ($1, $2, $3)`,
+    [PG_SERVICE_NAME, eventType, JSON.stringify(eventData)]
+  );
+}
+
+async function syncSessionData() {
+  try {
+    // Read current sessions from session_index.jsonl
+    const indexPath = path.join(KIMI_HOME, 'session_index.jsonl');
+    if (!fs.existsSync(indexPath)) return;
+    const lines = fs.readFileSync(indexPath, 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line);
+        // Upsert session into kimi_sessions_sync
+        await pgQuery(
+          `INSERT INTO kimi_sessions_sync (session_id, workspace, status, metadata, last_activity)
+           VALUES ($1, $2, 'active', $3, NOW())
+           ON CONFLICT (session_id) DO UPDATE SET
+             status = 'active',
+             last_activity = NOW(),
+             metadata = $3`,
+          [entry.sessionId, entry.workDir || '', JSON.stringify({ sessionDir: entry.sessionDir })]
+        );
+      } catch(e) {}
+    }
+    // Update sync state
+    await pgQuery(
+      `INSERT INTO kimi_sync_state (service, last_sync, sync_data, status)
+       VALUES ($1, NOW(), $2, 'ok')
+       ON CONFLICT (service) DO UPDATE SET
+         last_sync = NOW(), sync_data = $2, status = 'ok'`,
+      [PG_SERVICE_NAME, JSON.stringify({ sessions: lines.length })]
+    );
+    pgLastSync = new Date().toISOString();
+    pgSyncCount++;
+  } catch (err) {
+    log(`⚠️ Session sync error: ${err.message}`);
+  }
+}
+
+// Periodic sync every 5 minutes
+setInterval(() => {
+  if (pgPool && pgConnected) {
+    syncSessionData().catch(e => {});
+  }
+}, 5 * 60 * 1000);
+
+// Initialize PG on startup
+initPgPool();
+// Ensure tables after a short delay (let PG pool connect first)
+setTimeout(() => {
+  ensureKimiTables().then(() => {
+    syncSessionData().catch(e => {});
+    logActivity('startup', { port: PORT, pid: process.pid });
+  });
+}, 5000);
+
 function log(m) {
   debugLog.push(`[${new Date().toISOString()}] ${m}`);
   // Prevent memory leak — keep last 200 lines
@@ -2171,6 +2348,32 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
         <button class="btn" onclick="uploadToPentaract()">☁ Upload to Pentaract</button>
       </div>
     </div>
+
+    <!-- PostgreSQL Sync Dashboard -->
+    <div class="card-header" onclick="toggleSection('pgsync')">
+      <h2>🐘 PostgreSQL Sync (Pentaract + Kimi)</h2>
+      <span class="arrow" id="arrow-pgsync">▶</span>
+    </div>
+    <div id="section-pgsync" class="section-content" style="display:none">
+      <div class="grid-2" id="pgStatusBox">
+        <div class="stat-box"><div class="label">Connection</div><div class="value" id="pgConnStatus">⏳ Loading...</div></div>
+        <div class="stat-box"><div class="label">Database</div><div class="value" id="pgDbName">—</div></div>
+        <div class="stat-box"><div class="label">PG Version</div><div class="value" id="pgVersion">—</div></div>
+        <div class="stat-box"><div class="label">Active Connections</div><div class="value" id="pgConns">—</div></div>
+        <div class="stat-box"><div class="label">Total Syncs</div><div class="value" id="pgSyncs">—</div></div>
+        <div class="stat-box"><div class="label">Last Sync</div><div class="value" id="pgLastSync">—</div></div>
+        <div class="stat-box"><div class="label">Errors</div><div class="value" id="pgErrors">—</div></div>
+        <div class="stat-box"><div class="label">Pool (total/idle/wait)</div><div class="value" id="pgPool">—</div></div>
+      </div>
+      <div class="btn-row" style="margin:12px 0">
+        <button class="btn" onclick="loadPgStatus()">🔄 Refresh Status</button>
+        <button class="btn" onclick="forcePgSync()">🔃 Force Sync Now</button>
+        <button class="btn" onclick="loadPgTables()">📋 List Tables</button>
+      </div>
+      <div id="pgTablesContent"><div class="empty-state">Click "List Tables" to see shared database tables</div></div>
+      <div id="pgTableDataContent" style="margin-top:12px"></div>
+      <div id="pgActivityContent" style="margin-top:12px"></div>
+    </div>
   </div>
 
 </div>
@@ -2635,7 +2838,101 @@ function formatSize(bytes){
   return b.toFixed(1)+' '+units[i];
 }
 
+// ====== PostgreSQL Sync Functions ======
+async function loadPgStatus(){
+  try{
+    const r=await fetch('/kimi-admin/pg-status');
+    const d=await r.json();
+    $('pgConnStatus').textContent=d.connected?'✅ Connected':'❌ Disconnected';
+    $('pgConnStatus').className='value '+(d.connected?'green':'red');
+    $('pgDbName').textContent=d.database||'—';
+    $('pgVersion').textContent=(d.pg_version||'—').split(',')[0];
+    $('pgConns').textContent=d.active_connections||0;
+    $('pgSyncs').textContent=d.total_syncs||0;
+    $('pgLastSync').textContent=d.last_sync?new Date(d.last_sync).toLocaleString():'Never';
+    $('pgErrors').textContent=d.total_errors||0;
+    $('pgErrors').className='value '+(d.total_errors>0?'red':'green');
+    if(d.pool_stats){$('pgPool').textContent=d.pool_stats.total+'/'+d.pool_stats.idle+'/'+d.pool_stats.waiting;}
+    loadPgActivity();
+  }catch(e){$('pgConnStatus').textContent='❌ Error: '+e.message;}
+}
+async function forcePgSync(){
+  showToast('Syncing sessions to PostgreSQL...');
+  try{
+    const r=await fetch('/kimi-admin/pg-sync',{method:'POST'});
+    const d=await r.json();
+    showToast(d.message||(d.success?'Synced!':'Sync failed'));
+    loadPgStatus();
+  }catch(e){showToast(e.message,true);}
+}
+async function loadPgTables(){
+  showToast('Loading tables...');
+  try{
+    const r=await fetch('/kimi-admin/pg-tables');
+    const d=await r.json();
+    if(!d.tables||d.tables.length===0){$('pgTablesContent').innerHTML='<div class="empty-state">No tables found</div>';return;}
+    let h='<table style="width:100%;border-collapse:collapse;margin-top:8px">';
+    h+='<tr style="background:#252540"><th style="padding:8px;text-align:left;color:#6c5ce7">Table</th><th style="padding:8px;text-align:right;color:#6c5ce7">Rows</th><th style="padding:8px;text-align:center;color:#6c5ce7">Action</th></tr>';
+    d.tables.forEach(t=>{
+      const cnt=t.row_count!==null?t.row_count:'?';
+      h+='<tr style="border-bottom:1px solid #2a2a3e"><td style="padding:8px;color:#fff">'+escapeHtml(t.table_name)+'</td>';
+      h+='<td style="padding:8px;text-align:right;color:#888">'+cnt+'</td>';
+      h+='<td style="padding:8px;text-align:center"><button class="btn" style="padding:4px 10px;font-size:11px" onclick="viewPgTable(\''+encodeURIComponent(t.table_name)+'\')">View</button></td></tr>';
+    });
+    h+='</table>';
+    $('pgTablesContent').innerHTML=h;
+    showToast('Loaded '+d.tables.length+' tables');
+  }catch(e){showToast(e.message,true);}
+}
+async function viewPgTable(encName){
+  const name=decodeURIComponent(encName);
+  showToast('Loading '+name+'...');
+  try{
+    const r=await fetch('/kimi-admin/pg-table?name='+encodeURIComponent(name)+'&limit=30');
+    const d=await r.json();
+    if(!d.rows||d.rows.length===0){$('pgTableDataContent').innerHTML='<div class="empty-state">'+escapeHtml(name)+': Empty</div>';return;}
+    const cols=Object.keys(d.rows[0]);
+    let h='<div class="card" style="margin-top:8px"><h2>📋 '+escapeHtml(name)+' ('+d.rows.length+' rows)</h2>';
+    h+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
+    h+='<tr style="background:#252540">'+cols.map(c=>'<th style="padding:6px 8px;text-align:left;color:#6c5ce7;white-space:nowrap">'+escapeHtml(c)+'</th>').join('')+'</tr>';
+    d.rows.slice(0,20).forEach(row=>{
+      h+='<tr style="border-bottom:1px solid #2a2a3e">'+cols.map(c=>{
+        let v=row[c];
+        if(v===null||v===undefined) v='';
+        else if(typeof v==='object') v=JSON.stringify(v);
+        else v=String(v);
+        if(v.length>80) v=v.substring(0,80)+'...';
+        return '<td style="padding:6px 8px;color:#ccc;white-space:nowrap;max-width:300px;overflow:hidden;text-overflow:ellipsis">'+escapeHtml(v)+'</td>';
+      }).join('')+'</tr>';
+    });
+    h+='</table></div></div>';
+    $('pgTableDataContent').innerHTML=h;
+  }catch(e){showToast(e.message,true);}
+}
+async function loadPgActivity(){
+  try{
+    const r=await fetch('/kimi-admin/pg-activity?limit=20');
+    const d=await r.json();
+    if(!d.activities||d.activities.length===0){$('pgActivityContent').innerHTML='';return;}
+    let h='<div class="card" style="margin-top:12px"><h2>📝 Recent Activity</h2>';
+    d.activities.forEach(a=>{
+      const time=new Date(a.created_at).toLocaleString();
+      const data=typeof a.event_data==='object'?JSON.stringify(a.event_data):a.event_data;
+      h+='<div style="padding:6px 0;border-bottom:1px solid #2a2a3e;font-size:12px">';
+      h+='<span style="color:#6c5ce7">'+escapeHtml(a.service)+'</span> ';
+      h+='<span style="color:#f1c40f">'+escapeHtml(a.event_type)+'</span> ';
+      h+='<span style="color:#888">'+time+'</span>';
+      if(data&&data!=='{}') h+=' <span style="color:#aaa">'+escapeHtml(data).substring(0,100)+'</span>';
+      h+='</div>';
+    });
+    h+='</div>';
+    $('pgActivityContent').innerHTML=h;
+  }catch(e){}
+}
+
 loadProviders();
+// Auto-load PG status on page load
+setTimeout(loadPgStatus,500);
 </script>
 </body>
 </html>`;
@@ -2864,53 +3161,161 @@ loadProviders();
     return;
   }
 
-  // GET /kimi-admin/pg-info — PostgreSQL connection info
+  // GET /kimi-admin/pg-info — PostgreSQL connection info (Aiven shared DB)
   if (req.url === '/kimi-admin/pg-info' && req.method === 'GET') {
     const pgInfo = {
       success: true,
-      database: 'kimi_postgres',
-      user: 'kimi_postgres_user',
-      host: 'dpg-d98sd9jtqb8s739mee80-a.oregon-postgres.render.com',
-      port: 5432,
-      internal_host: 'dpg-d98sd9jtqb8s739mee80-a',
-      external_connection_string: 'postgresql://kimi_postgres_user:TXIdRdDqyyHVfDoxXIVRUGDYGLTCzMoL@dpg-d98sd9jtqb8s739mee80-a.oregon-postgres.render.com:5432/kimi_postgres',
-      internal_connection_string: 'postgresql://kimi_postgres_user:TXIdRdDqyyHVfDoxXIVRUGDYGLTCzMoL@dpg-d98sd9jtqb8s739mee80-a/kimi_postgres',
-      psql_command: 'PGPASSWORD=TXIdRdDqyyHVfDoxXIVRUGDYGLTCzMoL psql -h dpg-d98sd9jtqb8s739mee80-a.oregon-postgres.render.com -p 5432 -U kimi_postgres_user -d kimi_postgres',
-      note: 'External connections require SSL (sslmode=require). Free tier may need IP allowlist.',
-      created_at: '2026-07-11',
-      plan: 'free (1GB, expires 2026-08-10)'
+      type: 'Aiven PostgreSQL (shared with Pentaract)',
+      database: PG_DATABASE,
+      user: PG_USER,
+      host: PG_HOST,
+      port: PG_PORT,
+      service_name: PG_SERVICE_NAME,
+      ssl: true,
+      tables: ['kimi_activity', 'kimi_sessions_sync', 'kimi_sync_state', 'storages', 'files', 'users', 'access', 'file_chunks', 'storage_workers', 'storage_workers_usages'],
+      note: 'Shared database between Kimi Code and Pentaract. SSL required.',
+      connected: pgConnected
     };
     res.writeHead(200, {'Content-Type': 'application/json'});
     return res.end(JSON.stringify(pgInfo, null, 2));
   }
 
-  // POST /kimi-admin/pg-test — test PostgreSQL connection from within Render
+  // POST /kimi-admin/pg-test — test Aiven PostgreSQL connection
   if (req.url === '/kimi-admin/pg-test' && req.method === 'POST') {
-    const { spawn } = require('child_process');
-    const testQuery = "SELECT current_database() as db, version() as ver, now() as time";
-    const child = spawn('psql', [
-      '-h', 'dpg-d98sd9jtqb8s739mee80-a',
-      '-U', 'kimi_postgres_user',
-      '-d', 'kimi_postgres',
-      '-c', testQuery,
-      '-t', '-A'
-    ], {
-      env: { ...process.env, PGPASSWORD: 'TXIdRdDqyyHVfDoxXIVRUGDYGLTCzMoL' },
-      timeout: 10000
-    });
-    let output = '';
-    child.stdout.on('data', d => output += d);
-    child.stderr.on('data', d => output += d);
-    child.on('close', (code) => {
-      res.writeHead(code === 0 ? 200 : 500, {'Content-Type': 'application/json'});
+    pgQuery("SELECT current_database() as db, version() as ver, now() as time").then(r => {
+      res.writeHead(r.error ? 500 : 200, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({
-        success: code === 0,
-        exit_code: code,
-        output: output.trim(),
-        message: code === 0 ? 'PostgreSQL connection OK' : 'Connection failed'
+        success: !r.error,
+        rows: r.rows,
+        error: r.error,
+        message: r.error ? 'Connection failed: ' + r.error : 'Aiven PostgreSQL connection OK'
       }));
+    }).catch(e => {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: false, error: e.message }));
     });
-    child.on('error', (e) => {
+    return;
+  }
+
+  // ====== SHARED POSTGRESQL ROUTES (Aiven — Pentaract + Kimi Code) ======
+
+  // GET /kimi-admin/pg-status — live connection status to Aiven PG
+  if (req.url === '/kimi-admin/pg-status' && req.method === 'GET') {
+    let version = 'unknown', dbTime = 'unknown', activeConns = 0;
+    pgQuery('SELECT version() as ver, now() as dbtime, (SELECT count(*) FROM pg_stat_activity WHERE datname=$1) as conns', [PG_DATABASE]).then(r => {
+      if (r.rows.length > 0) {
+        version = r.rows[0].ver;
+        dbTime = r.rows[0].dbtime;
+        activeConns = parseInt(r.rows[0].conns) || 0;
+      }
+    }).catch(e => {}).finally(() => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        success: pgConnected,
+        connected: pgConnected,
+        host: PG_HOST,
+      port: PG_PORT,
+      database: PG_DATABASE,
+      user: PG_USER,
+      service_name: PG_SERVICE_NAME,
+      pg_version: version,
+      db_time: dbTime,
+      active_connections: activeConns,
+      last_sync: pgLastSync,
+      total_syncs: pgSyncCount,
+      total_errors: pgErrorCount,
+      pool_stats: pgPool ? { total: pgPool.totalCount, idle: pgPool.idleCount, waiting: pgPool.waitingCount } : null
+    }, null, 2));
+    });
+    return;
+  }
+
+  // GET /kimi-admin/pg-activity — recent activity log from shared PG
+  if (req.url.startsWith('/kimi-admin/pg-activity') && req.method === 'GET') {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const limit = parseInt(urlObj.searchParams.get('limit')) || 50;
+    const service = urlObj.searchParams.get('service') || null;
+    let q = 'SELECT * FROM kimi_activity';
+    const params = [];
+    if (service) { params.push(service); q += ` WHERE service=$${params.length}`; }
+    q += ' ORDER BY created_at DESC';
+    params.push(limit);
+    q += ` LIMIT $${params.length}`;
+    pgQuery(q, params).then(r => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: !r.error, count: r.rows.length, activities: r.rows, error: r.error }));
+    }).catch(e => {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    });
+    return;
+  }
+
+  // GET /kimi-admin/pg-sessions — sessions synced from Kimi Code
+  if (req.url === '/kimi-admin/pg-sessions' && req.method === 'GET') {
+    pgQuery('SELECT * FROM kimi_sessions_sync ORDER BY last_activity DESC LIMIT 100').then(r => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: !r.error, count: r.rows.length, sessions: r.rows, error: r.error }));
+    }).catch(e => {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    });
+    return;
+  }
+
+  // POST /kimi-admin/pg-sync — force sync sessions to PostgreSQL now
+  if (req.url === '/kimi-admin/pg-sync' && req.method === 'POST') {
+    syncSessionData().then(() => logActivity('manual_sync', { sessions_synced: pgSyncCount })).then(() => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: true, message: 'Sync completed', total_syncs: pgSyncCount, last_sync: pgLastSync }));
+    }).catch(e => {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    });
+    return;
+  }
+
+  // GET /kimi-admin/pg-tables — list all tables in shared database
+  if (req.url === '/kimi-admin/pg-tables' && req.method === 'GET') {
+    pgQuery(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`).then(r => {
+      // Get row counts separately (query_to_xml may not be available)
+      const tableNames = r.rows.map(t => t.table_name);
+      const countPromises = tableNames.map(name =>
+        pgQuery(`SELECT count(*) as cnt FROM ${name}`).then(cr => ({
+          table_name: name,
+          row_count: cr.rows[0] ? parseInt(cr.rows[0].cnt) : 0
+        })).catch(() => ({ table_name: name, row_count: '?' }))
+      );
+      return Promise.all(countPromises);
+    }).then(tables => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: true, tables, error: null }));
+    }).catch(e => {
+      res.writeHead(500, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: false, tables: [], error: e.message }));
+    });
+    return;
+  }
+
+  // GET /kimi-admin/pg-table — rows from a specific shared table (read-only)
+  if (req.url.startsWith('/kimi-admin/pg-table') && req.method === 'GET') {
+    const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const tableName = urlObj.searchParams.get('name');
+    const limit = parseInt(urlObj.searchParams.get('limit')) || 50;
+    if (!tableName) {
+      res.writeHead(400, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: 'Missing ?name= parameter' }));
+    }
+    // Whitelist allowed tables (prevent SQL injection)
+    const allowed = ['kimi_activity', 'kimi_sessions_sync', 'kimi_sync_state', 'storages', 'files', 'users', 'access', 'file_chunks', 'storage_workers', 'storage_workers_usages'];
+    if (!allowed.includes(tableName)) {
+      res.writeHead(403, {'Content-Type': 'application/json'});
+      return res.end(JSON.stringify({ success: false, error: 'Table not in whitelist', allowed }));
+    }
+    pgQuery(`SELECT * FROM ${tableName} ORDER BY 1 DESC LIMIT $1`, [limit]).then(r => {
+      res.writeHead(200, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({ success: !r.error, table: tableName, count: r.rows.length, rows: r.rows, error: r.error }));
+    }).catch(e => {
       res.writeHead(500, {'Content-Type': 'application/json'});
       res.end(JSON.stringify({ success: false, error: e.message }));
     });
