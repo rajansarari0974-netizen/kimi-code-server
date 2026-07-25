@@ -3,16 +3,19 @@ FROM node:18-slim
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apt-get update -qq && apt-get install -y -qq ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update -qq && apt-get install -y -qq ca-certificates git && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install
 COPY package*.json ./
-RUN npm install --production 2>&1 | tail -3
+RUN npm install --production 2>&1 | tail -5
+
+# Pre-cache kimi binary for faster startup
+RUN npx --yes @moonshot-ai/kimi-code --version 2>/dev/null || true
 
 # Copy app source
 COPY . .
 
-# Setup will run at startup from server.js with actual env vars
+# Setup runs at startup from server.js with actual env vars
 EXPOSE 10000
 
 # Health check
