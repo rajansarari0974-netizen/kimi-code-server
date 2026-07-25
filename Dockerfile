@@ -2,24 +2,24 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
-RUN apt-get update -qq && apt-get install -y -qq ca-certificates git && rm -rf /var/lib/apt/lists/*
+# Install runtime dependencies (curl for health checks)
+RUN apt-get update -qq && apt-get install -y -qq ca-certificates git curl && rm -rf /var/lib/apt/lists/*
 
 # Copy package files and install
 COPY package*.json ./
 RUN npm install --production 2>&1 | tail -5
 
-# Pre-cache kimi binary for faster startup
+# Pre-cache kimi binary
 RUN npx --yes @moonshot-ai/kimi-code --version 2>/dev/null || true
 
 # Copy app source
 COPY . .
+RUN chmod +x start.sh
 
-# Setup runs at startup from server.js with actual env vars
 EXPOSE 10000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:10000/health', r => process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=3 \
+  CMD curl -sf http://localhost:10000/ || exit 1
 
-CMD ["node", "server.js"]
+CMD ["bash", "start.sh"]
