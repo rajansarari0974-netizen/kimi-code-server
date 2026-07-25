@@ -2326,7 +2326,7 @@ async function loadSystemInfo(){
     const r=await fetch('/kimi-admin/system');
     const d=await r.json();
     if(!d.success){showToast(d.error||'Failed',true);return;}
-    const info=Object.entries(d.data||{}).map(([k,v])=>`<div class="stat-box"><strong>${k}</strong><span>${v}</span></div>`).join('');
+    const info=Object.entries(d.data||{}).map(([k,v])=>'<div class="stat-box"><strong>'+k+'</strong><span>'+v+'</span></div>').join('');
     document.getElementById('sysInfoContent').innerHTML='<div class="grid-2">'+info+'</div>';
   }catch(e){showToast(e.message,true)}
 }
