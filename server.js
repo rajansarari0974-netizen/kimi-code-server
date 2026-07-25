@@ -1897,6 +1897,7 @@ const server = http.createServer((req, res) => {
   // ====== ADMIN UI PAGE — Provider Management ======
   // GET /kimi-admin or /kimi-admin/ — full HTML page for managing providers
   if ((req.url === '/kimi-admin' || req.url === '/kimi-admin/') && req.method === 'GET') {
+    const ADMIN_BASE_DIR = process.cwd();
     const providers = readProvidersFromConfig();
     let configLines = [];
     try { configLines = fs.readFileSync(getConfigPath(), 'utf8').split('\n'); } catch(e) {}
@@ -2132,9 +2133,9 @@ h1{font-size:24px;font-weight:600;margin-bottom:4px;color:#fff}
     </div>
     <div id="section-files" class="section-content" style="display:none">
       <div class="toolbar">
-        <input id="filePath" value="/opt/render" onkeydown="if(event.key==='Enter')loadFiles()" style="flex:3">
+        <input id="filePath" value="${ADMIN_BASE_DIR}" onkeydown="if(event.key==='Enter')loadFiles()" style="flex:3">
         <button class="btn" onclick="loadFiles()">📂 Browse</button>
-        <button class="btn btn-secondary" onclick="document.getElementById('filePath').value='/opt/render/kimi-code-server';loadFiles()">📁 Server</button>
+        <button class="btn btn-secondary" onclick="document.getElementById('filePath').value='${ADMIN_BASE_DIR}/kimi-code-server';loadFiles()">📁 Server</button>
       </div>
       <div class="breadcrumb" id="fileBreadcrumb"></div>
       <div id="fileList" class="file-browser"><div class="empty-state">Enter a path and click Browse.</div></div>
@@ -3295,12 +3296,13 @@ loadProviders();
   // GET /kimi-admin/files — File Browser
   if (req.url.startsWith('/kimi-admin/files') && req.method === 'GET') {
     const urlObj = new URL(req.url, 'http://' + (req.headers.host || 'localhost'));
-    let dirPath = urlObj.searchParams.get('path') || '/opt/render';
+    const BASE_DIR = process.cwd();
+    let dirPath = urlObj.searchParams.get('path') || BASE_DIR;
     const download = urlObj.searchParams.get('download');
-    if (!dirPath.startsWith('/opt/render')) dirPath = '/opt/render';
+    if (!dirPath.startsWith(BASE_DIR) && !dirPath.startsWith('/app')) dirPath = BASE_DIR;
     if (download) {
       const filePath = path.join(dirPath, download);
-      if (!filePath.startsWith('/opt/render') || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+      if (!filePath.startsWith(BASE_DIR) || !fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
         res.writeHead(404, {'Content-Type': 'application/json'});
         return res.end(JSON.stringify({ success: false, error: 'File not found or access denied' }));
       }
