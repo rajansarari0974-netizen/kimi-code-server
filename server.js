@@ -4080,15 +4080,10 @@ setTimeout(loadSystemInfo,300);
 '  document.addEventListener("visibilitychange", function(){ if(!document.hidden) injectWorkspaceIds(); });\n' +
 '})();\n' +
 '</script>';
-          // WebSocket redirect — always use tunnel when available for reliable WS connections
+          // WebSocket redirect — DYNAMIC: fetch tunnel URL from /tunnel-url endpoint at runtime
           // Cloudflare (and some reverse proxies) block WS upgrades; tunnel bypasses this
-          const tunnelOrigin = (() => { try { return tunnelUrl ? new URL(tunnelUrl).origin : null; } catch(e) { return null; } })();
-          let wsRedirect;
-          if (tunnelOrigin) {
-            wsRedirect = '<script>\n(function(){\n  var targetOrigin = ' + JSON.stringify(tunnelOrigin) + ';\n  var pageOrigin = window.location.origin;\n  if (targetOrigin === pageOrigin) return;\n  var NativeWS = window.WebSocket;\n  window.WebSocket = function(url, protocols) {\n    if (typeof url === "string" && (url.startsWith(pageOrigin + "/api/v1/ws") || url.startsWith("/api/v1/ws"))) {\n      var wsPath = url.includes("/api/v1/ws") ? url.substring(url.indexOf("/api/v1/ws")) : url;\n      url = targetOrigin + wsPath;\n    }\n    return new NativeWS(url, protocols);\n  };\n  window.WebSocket.prototype = NativeWS.prototype;\n  window.WebSocket.CONNECTING = 0;\n  window.WebSocket.OPEN = 1;\n  window.WebSocket.CLOSING = 2;\n  window.WebSocket.CLOSED = 3;\n})();\n</script>';
-          } else {
-            wsRedirect = '<!-- WS direct: tunnel not available -->';
-          }
+          // This script fetches the current tunnel URL and patches window.WebSocket dynamically
+          const wsRedirect = '<script>\n(function() {\n  var pageOrigin = window.location.origin;\n  var currentTunnelOrigin = null;\n  var NativeWS = window.WebSocket;\n  var wsPatched = false;\n\n  function patchWebSocket(tunnelOrigin) {\n    if (!tunnelOrigin || tunnelOrigin === pageOrigin) return;\n    if (currentTunnelOrigin === tunnelOrigin && wsPatched) return;\n    currentTunnelOrigin = tunnelOrigin;\n    window.WebSocket = function(url, protocols) {\n      if (typeof url === "string" && (url.startsWith(pageOrigin + "/api/v1/ws") || url.startsWith("/api/v1/ws"))) {\n        var wsPath = url.includes("/api/v1/ws") ? url.substring(url.indexOf("/api/v1/ws")) : url;\n        url = tunnelOrigin + wsPath;\n      }\n      return new NativeWS(url, protocols);\n    };\n    window.WebSocket.prototype = NativeWS.prototype;\n    window.WebSocket.CONNECTING = 0;\n    window.WebSocket.OPEN = 1;\n    window.WebSocket.CLOSING = 2;\n    window.WebSocket.CLOSED = 3;\n    wsPatched = true;\n    console.log("[Kimi] WebSocket patched to tunnel:", tunnelOrigin);\n  }\n\n  async function fetchAndPatch() {\n    try {\n      var resp = await fetch("/tunnel-url", { cache: "no-store" });\n      var data = await resp.json();\n      if (data.tunnel_url) {\n        var u = new URL(data.tunnel_url);\n        patchWebSocket(u.origin);\n      }\n    } catch(e) {\n      console.warn("[Kimi] Failed to fetch tunnel URL:", e);\n    }\n  }\n\n  // Initial fetch\n  fetchAndPatch();\n  // Refresh every 30s in case tunnel restarts\n  setInterval(fetchAndPatch, 30000);\n  // Also refresh on visibility change (tab focus)\n  document.addEventListener("visibilitychange", function() {\n    if (!document.hidden) fetchAndPatch();\n  });\n})();\n</script>';
           // Provider manager — robust multi-strategy provider panel + floating modal
           const providerScript = '<script>\n(function(){\n' +
 '  var PROVIDER_DEBUG = false;\n' +
