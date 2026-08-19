@@ -4017,7 +4017,45 @@ setTimeout(loadSystemInfo,300);
     return;
   }
 
-  // Proxy to Kimi daemon
+  // Explicit /api/* proxy handler — bypasses daemonAlive check so API requests work even during daemon startup
+  if (req.url && req.url.startsWith('/api/')) {
+    const opts = {
+      hostname: '127.0.0.1',
+      port: KIMI_PORT,
+      path: req.url,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: `127.0.0.1:${KIMI_PORT}`,
+        'connection': 'close',
+        'authorization': `Bearer ${FIXED_TOKEN}`
+      }
+    };
+
+    const pr = http.request(opts, (prRes) => {
+      const headers = { ...prRes.headers };
+      delete headers['transfer-encoding'];
+      delete headers['content-security-policy'];
+      res.writeHead(prRes.statusCode, headers);
+      prRes.pipe(res);
+    });
+
+    pr.on('error', (err) => {
+      log(`⚠️ API proxy error: ${err.message}`);
+      res.writeHead(503, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        code: 50001,
+        msg: 'Kimi daemon is restarting. Please try again in a few seconds.',
+        data: null,
+        request_id: req.headers['x-request-id'] || null
+      }));
+    });
+
+    req.pipe(pr);
+    return;
+  }
+
+  // Proxy to Kimi daemon (for non-API routes like HTML pages)
   if (daemonAlive) {
     const opts = {
       hostname: '127.0.0.1',
