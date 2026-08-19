@@ -39,10 +39,10 @@ let tunnelProc = null;
 let tunnelUrl = null;
 
 // ====== PENTARACT BACKUP CONSTANTS ======
-const PENTARACT_URL = process.env.PENTARACT_URL || 'https://pentaract-f4ga.onrender.com';
-const PENTARACT_EMAIL = process.env.PENTARACT_EMAIL || 'admin@pentaract.com';
-const PENTARACT_PASS = process.env.PENTARACT_PASS || 'admin123';
-const BACKUP_STORAGE_ID = process.env.BACKUP_STORAGE_ID || 'd875641e-ac08-4794-9d3b-823dd2705981';
+const PENTARACT_URL = process.env.PENTARACT_URL || 'https://pentaract-i2os.onrender.com';
+const PENTARACT_EMAIL = process.env.PENTARACT_EMAIL || 'admin@pentaract.io';
+const PENTARACT_PASS = process.env.PENTARACT_PASS || 'Px9kL2mN7vQ4wR8tY5uI1oP3sA6dF0gH';
+const BACKUP_STORAGE_ID = process.env.BACKUP_STORAGE_ID || '516cb035-eb2f-4fce-842e-2c9a7d66458d';
 const BACKUP_INTERVAL_MIN = parseInt(process.env.BACKUP_INTERVAL_MIN) || 30;
 const KIMI_HOME = process.env['KIMI_CODE_HOME'] || path.join(os.homedir(), '.kimi-code');
 
@@ -80,7 +80,7 @@ function readAivenPassword() {
   return '';
 }
 
-const PG_HOST = process.env.PG_HOST || 'pg-752045-stanuserid-9476.a.aivencloud.com';
+const PG_HOST = process.env.PG_HOST || '68.183.6.134';
 const PG_PORT = parseInt(process.env.PG_PORT) || 26183;
 const PG_USER = process.env.PG_USER || 'avnadmin';
 const PG_PASSWORD = readAivenPassword();
@@ -491,8 +491,8 @@ function pentaractLogin() {
       -H "Accept: application/json, text/plain, */*" \
       -H "Accept-Language: en-US,en;q=0.9" \
       -X POST "${PENTARACT_URL}/api/auth/login" \
-      -H "Content-Type: application/x-www-form-urlencoded" \
-      -d "email=${encodeURIComponent(PENTARACT_EMAIL)}&password=${encodeURIComponent(PENTARACT_PASS)}"`, {
+      -H "Content-Type: application/json" \
+      -d '{"email":"${PENTARACT_EMAIL}","password":"${PENTARACT_PASS}"}'`, {
       timeout: 20000, encoding: 'utf8'
     });
     if (result.trim().startsWith('<')) throw new Error('Got HTML instead of JSON (Cloudflare challenge)');
@@ -656,7 +656,7 @@ function performRemoteBackupStreaming(token, includes) {
     const options = {
       hostname: parsedUrl.hostname,
       port: 443,
-      path: `/api/files/${BACKUP_STORAGE_ID}/upload`,
+      path: `/api/storages/${BACKUP_STORAGE_ID}/files/upload`,
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -736,7 +736,7 @@ function performRemoteBackupStreaming(token, includes) {
 function performRemoteBackupCurl(localTarFile) {
   try {
     const token = pentaractLogin();
-    execSync(`curl ${CURL_FLAGS} -X POST "${PENTARACT_URL}/api/files/${BACKUP_STORAGE_ID}/upload" \
+    execSync(`curl ${CURL_FLAGS} -X POST "${PENTARACT_URL}/api/storages/${BACKUP_STORAGE_ID}/files/upload" \
       -H "Authorization: Bearer ${token}" \
       -F "file=@${localTarFile}" -F "path=/backups/"`, { timeout: 60000, encoding: 'utf8' });
     log(`✅ Pentaract remote backup uploaded (curl fallback)`);
@@ -754,14 +754,14 @@ function performRemoteBackup(localTarFile) {
 function restoreFromPentaract() {
   try {
     const token = pentaractLogin();
-    const listResult = execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/files/${BACKUP_STORAGE_ID}/tree?path=backups" \
+    const listResult = execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/storages/${BACKUP_STORAGE_ID}/files/tree/backups" \
       -H "Authorization: Bearer ${token}"`, { timeout: 15000, encoding: 'utf8' });
     if (listResult.trim().startsWith('<')) throw new Error('Cloudflare challenge on list');
     const data = JSON.parse(listResult);
-    if (!data.files || data.files.length === 0) { log('ℹ️ No remote backups found'); return false; }
+    if (!Array.isArray(data) || data.length === 0) { log('ℹ️ No remote backups found'); return false; }
     // Filter to only tar.gz files — skip tiny (< 3KB = config-only), allow up to 100MB
-    const backups = data.files.filter(f => f.path.endsWith('.tar.gz') && f.size > 3000 && f.size < 100000000);
-    if (data.files.length > backups.length) log(`⚠️ Filtered out ${data.files.length - backups.length} backup files (size limits)`);
+    const backups = data.filter(f => f.path.endsWith('.tar.gz') && f.size > 3000 && f.size < 100000000);
+    if (data.length > backups.length) log(`⚠️ Filtered out ${data.length - backups.length} backup files (size limits)`);
     if (backups.length === 0) { log('ℹ️ No valid backup files found'); return false; }
     // Sort by SIZE DESCENDING (largest first — most sessions, most complete backup)
     // This ensures we pick the clean/full backup (52KB) over partial ones (24KB)
@@ -772,7 +772,7 @@ function restoreFromPentaract() {
       const bk = backups[i];
       log(`🔄 Trying backup ${i+1}/${Math.min(backups.length, 20)}: ${bk.path} (${(bk.size/1024).toFixed(1)}KB)`);
       try {
-        execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/files/${BACKUP_STORAGE_ID}/download/${bk.path}" \
+        execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/storages/${BACKUP_STORAGE_ID}/files/download/${bk.path}" \
           -H "Authorization: Bearer ${token}" -o "${tempFile}"`, { timeout: 120000 });
         const buf = fs.readFileSync(tempFile);
         if (buf[0] !== 0x1f || buf[1] !== 0x8b) { log(`⚠️ Not valid tar.gz: ${bk.path}`); continue; }
@@ -1199,14 +1199,14 @@ function syncBothLocations() {
   let remoteName = null;
   try {
     const token = pentaractLogin();
-    const listResult = execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/files/${BACKUP_STORAGE_ID}/tree?path=backups" \
+    const listResult = execSync(`curl ${CURL_FLAGS} "${PENTARACT_URL}/api/storages/${BACKUP_STORAGE_ID}/files/tree/backups" \
       -H "Authorization: Bearer ${token}"`, { timeout: 15000, encoding: 'utf8' });
     if (!listResult.trim().startsWith('<')) {
       const data = JSON.parse(listResult);
-      if (data.files && data.files.length > 0) {
-        data.files.sort((a, b) => b.path.localeCompare(a.path));
+      if (Array.isArray(data) && data.length > 0) {
+        data.sort((a, b) => b.path.localeCompare(a.path));
         hasRemote = true;
-        remoteName = data.files[0].path;
+        remoteName = data[0].path;
       }
     }
   } catch (e) {}
@@ -4637,6 +4637,47 @@ setTimeout(loadSystemInfo,300);
         res.writeHead(200, {'Content-Type': 'text/html'});
         res.end(STARTING_HTML);
       }
+    });
+
+    req.pipe(pr);
+    return;
+  }
+
+  // Explicit API proxy handler — handles /api/* routes even if daemonAlive check has issues
+  // This ensures API endpoints like /api/sessions, /api/v1/ws work reliably
+  if (req.url && req.url.startsWith('/api/')) {
+    const opts = {
+      hostname: '127.0.0.1',
+      port: KIMI_PORT,
+      path: req.url,
+      method: req.method,
+      headers: {
+        ...req.headers,
+        host: `127.0.0.1:${KIMI_PORT}`,
+        'connection': 'close',
+        'authorization': `Bearer ${FIXED_TOKEN}`
+      }
+    };
+
+    const pr = http.request(opts, (prRes) => {
+      const headers = { ...prRes.headers };
+      delete headers['transfer-encoding'];
+      delete headers['content-security-policy'];
+
+      res.writeHead(prRes.statusCode, headers);
+      prRes.pipe(res);
+    });
+
+    pr.on('error', (err) => {
+      log(`⚠️ API Proxy error: ${err.message}`);
+      // Don't flip daemonAlive here — let the health check handle it
+      res.writeHead(503, {'Content-Type': 'application/json'});
+      res.end(JSON.stringify({
+        code: 50001,
+        msg: 'Kimi daemon is restarting. Please try again in a few seconds.',
+        data: null,
+        request_id: req.headers['x-request-id'] || null
+      }));
     });
 
     req.pipe(pr);
