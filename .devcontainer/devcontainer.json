@@ -17,11 +17,13 @@
   "portsAttributes": {
     "10000": {
       "label": "Kimi Code HTTP",
-      "onAutoForward": "notify"
+      "onAutoForward": "notify",
+      "visibility": "public"
     },
     "58630": {
       "label": "Kimi Daemon",
-      "onAutoForward": "notify"
+      "onAutoForward": "notify",
+      "visibility": "public"
     }
   },
   "postCreateCommand": "npm install && node setup.js",
