@@ -1,0 +1,34 @@
+{
+  "name": "Kimi Code Server",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:18",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-vscode.vscode-typescript-next",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  },
+  "forwardPorts": [10000, 58627, 3000, 8080],
+  "portsAttributes": {
+    "10000": {
+      "label": "Kimi Code HTTP",
+      "onAutoForward": "notify"
+    },
+    "58627": {
+      "label": "Kimi Daemon",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "npm install && node setup.js",
+  "postStartCommand": "node server.js",
+  "remoteUser": "node",
+  "containerEnv": {
+    "NODE_ENV": "production",
+    "KIMI_PORT": "58630"
+  }
+}
