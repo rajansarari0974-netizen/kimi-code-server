@@ -13,13 +13,13 @@
       ]
     }
   },
-  "forwardPorts": [10000, 58627, 3000, 8080],
+  "forwardPorts": [10000, 58630, 3000, 8080],
   "portsAttributes": {
     "10000": {
       "label": "Kimi Code HTTP",
       "onAutoForward": "notify"
     },
-    "58627": {
+    "58630": {
       "label": "Kimi Daemon",
       "onAutoForward": "notify"
     }
