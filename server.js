@@ -16,6 +16,7 @@ const net = require('net');
 const fs = require('fs');
 const os = require('os');
 const crypto = require('crypto');
+const mime = require('mime-types') || require('./mime-fallback');
 
 const PORT = parseInt(process.env.PORT) || 10000;
 // Use the already-running daemon on 58630 instead of spawning our own
